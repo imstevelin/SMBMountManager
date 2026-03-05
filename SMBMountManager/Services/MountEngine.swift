@@ -12,6 +12,11 @@ actor MountEngine {
     private let postFailSleep: TimeInterval = 3
     private let maxBackoff: TimeInterval = 60
     private let passwordRetryInterval: TimeInterval = 60
+    
+    private var _failCount = 0
+    var isFailing: Bool {
+        return _failCount > 0
+    }
 
     init(mount: MountPoint) {
         self.mount = mount
@@ -33,13 +38,16 @@ actor MountEngine {
         task?.cancel()
         task = nil
         isRunning = false
+        if mount.createDesktopShortcut {
+            removeDesktopAlias()
+        }
         log("Engine stopped for '\(mount.name)'")
     }
 
     // MARK: - Main Mount Loop
 
     private func mountLoop() async {
-        var failCount = 0
+        _failCount = 0
 
         while !Task.isCancelled {
             // SSID check — skip mount attempts if not on allowed network
@@ -51,21 +59,54 @@ actor MountEngine {
 
             // Already mounted? Just wait and re-check.
             if isMounted() {
-                failCount = 0
+                _failCount = 0
+                if mount.createDesktopShortcut {
+                    createDesktopAlias()
+                }
                 try? await Task.sleep(for: .seconds(mountedCheckInterval))
                 continue
+            } else {
+                // If it suddenly became unmounted, ensure shortcut is removed
+                if mount.createDesktopShortcut {
+                    removeDesktopAlias()
+                }
             }
 
             // Prevent duplicate ghost mounts on wake-from-sleep: ensure target path is fully clear before any new mount attempt
-            let fm = FileManager.default
-            if fm.fileExists(atPath: mount.mountPath) {
-                let contents = (try? fm.contentsOfDirectory(atPath: mount.mountPath)) ?? []
-                if !contents.isEmpty {
-                    log("[WARN] Mount path \(mount.mountPath) is occupied by a stale session. Attempting OS cleanup...")
-                    let _ = processRun(path: "/usr/sbin/diskutil", args: ["unmount", "force", mount.mountPath])
-                    try? await Task.sleep(for: .seconds(mountedCheckInterval))
-                    continue
+            let targetPath = mount.mountPath
+            let isOccupied = await withTaskGroup(of: Bool?.self) { group in
+                group.addTask {
+                    let fm = FileManager.default
+                    if fm.fileExists(atPath: targetPath) {
+                        let contents = (try? fm.contentsOfDirectory(atPath: targetPath)) ?? []
+                        return !contents.isEmpty
+                    }
+                    return false
                 }
+                group.addTask {
+                    try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 sec timeout
+                    return nil
+                }
+                let result = await group.next() ?? nil
+                group.cancelAll()
+                return result ?? true // If timeout, assume occupied to avoid infinite hangs
+            }
+
+            if isOccupied {
+                log("[WARN] Mount path \(targetPath) is occupied by a stale session. Attempting OS cleanup...")
+                let _ = await Task.detached {
+                    let task = Process()
+                    task.launchPath = "/bin/bash"
+                    task.arguments = ["-c", "/sbin/umount -f \"\(targetPath)\" || /usr/sbin/diskutil unmount force \"\(targetPath)\" 2>/dev/null"]
+                    task.standardOutput = FileHandle.nullDevice
+                    task.standardError = FileHandle.nullDevice
+                    try? task.run()
+                    task.waitUntilExit()
+                }.value
+                
+                _failCount += 1
+                try? await Task.sleep(for: .seconds(mountedCheckInterval))
+                continue
             }
 
             // Get password
@@ -81,24 +122,27 @@ actor MountEngine {
                 guard !Task.isCancelled else { return }
 
                 // Check server reachability
-                guard isServerReachable(server) else {
+                let reachable = await Task.detached { self.isServerReachable(server) }.value
+                guard reachable else {
                     log("[WARN] Server \(server) not reachable")
                     continue
                 }
 
                 // Try mount_smbfs first
-                if attemptMountSmbfs(server: server, password: password) {
+                let smbfsSuccess = await Task.detached { self.attemptMountSmbfs(server: server, password: password) }.value
+                if smbfsSuccess {
                     log("[SUCCESS] Mounted \(mount.name) on \(server)")
                     mounted = true
-                    failCount = 0
+                    _failCount = 0
                     break
                 }
 
                 // Fallback: Finder mount via osascript
-                if attemptFinderMount(server: server, password: password) {
+                let finderSuccess = await Task.detached { self.attemptFinderMount(server: server, password: password) }.value
+                if finderSuccess {
                     log("[SUCCESS] Finder mount succeeded for \(mount.name) on \(server)")
                     mounted = true
-                    failCount = 0
+                    _failCount = 0
                     break
                 }
             }
@@ -109,9 +153,9 @@ actor MountEngine {
                 }
                 try? await Task.sleep(for: .seconds(mountedCheckInterval))
             } else {
-                failCount += 1
-                let delay = min(postFailSleep * pow(2, Double(min(failCount, 5))), maxBackoff)
-                log("[ERROR] Mount failed for '\(mount.name)' (attempt \(failCount)); waiting \(Int(delay))s")
+                _failCount += 1
+                let delay = min(postFailSleep * pow(2, Double(min(_failCount, 5))), maxBackoff)
+                log("[ERROR] Mount failed for '\(mount.name)' (attempt \(_failCount)); waiting \(Int(delay))s")
                 try? await Task.sleep(for: .seconds(delay))
             }
         }
@@ -124,7 +168,7 @@ actor MountEngine {
 
     // MARK: - Mount Methods
 
-    private func attemptMountSmbfs(server: String, password: String) -> Bool {
+    nonisolated private func attemptMountSmbfs(server: String, password: String) -> Bool {
         let mountPath = mount.mountPath
         let fm = FileManager.default
 
@@ -135,16 +179,6 @@ actor MountEngine {
                 try fm.createDirectory(atPath: mountPath, withIntermediateDirectories: true)
                 createdDir = true
             } catch {
-                log("[ERROR] Failed to create mount point: \(mountPath) — \(error.localizedDescription)")
-                return false
-            }
-        }
-
-        // Check mount point is empty (not already used by another mount)
-        if let contents = try? fm.contentsOfDirectory(atPath: mountPath), !contents.isEmpty {
-            if !isMounted() {
-                log("[ERROR] Mount point \(mountPath) exists and is not empty; aborting")
-                if createdDir { try? fm.removeItem(atPath: mountPath) }
                 return false
             }
         }
@@ -194,7 +228,7 @@ actor MountEngine {
         return false
     }
 
-    private func attemptFinderMount(server: String, password: String) -> Bool {
+    nonisolated private func attemptFinderMount(server: String, password: String) -> Bool {
         let url = "smb://\(mount.username):\(password)@\(server)/\(mount.shareName)"
         let script = "try\nmount volume \"\(url)\"\nend try"
 
@@ -251,7 +285,7 @@ actor MountEngine {
 
     // MARK: - Helpers
 
-    private func isServerReachable(_ server: String) -> Bool {
+    nonisolated private func isServerReachable(_ server: String) -> Bool {
         // Try ICMP ping first
         if processRun(path: "/sbin/ping", args: ["-c", "1", "-W", "1000", server]) {
             return true
@@ -263,7 +297,7 @@ actor MountEngine {
         return false
     }
 
-    private func getPassword() -> String? {
+    nonisolated private func getPassword() -> String? {
         if mount.useKeychain {
             return KeychainService.retrievePassword(forMount: mount.name, username: mount.username)
         }
@@ -272,7 +306,7 @@ actor MountEngine {
         return KeychainService.retrievePassword(forMount: mount.name, username: mount.username)
     }
 
-    private func processRun(path: String, args: [String]) -> Bool {
+    nonisolated private func processRun(path: String, args: [String]) -> Bool {
         let task = Process()
         task.launchPath = path
         task.arguments = args
@@ -380,18 +414,16 @@ actor MountEngine {
     nonisolated private func removeDesktopAlias() {
         let aliasName = mount.name
         let desktopPath = (NSSearchPathForDirectoriesInDomains(.desktopDirectory, .userDomainMask, true).first ?? "") + "/\(aliasName)"
-        
         let fm = FileManager.default
-        var isDir: ObjCBool = false
-        if fm.fileExists(atPath: desktopPath, isDirectory: &isDir) {
-            // Ensure we are deleting a file/alias, not an actual directory
-            if !isDir.boolValue {
-                do {
-                    log("[INFO] Removing desktop shortcut for '\(mount.name)'")
-                    try fm.removeItem(atPath: desktopPath)
-                } catch {
-                    log("[WARN] Failed to remove desktop shortcut: \(error.localizedDescription)")
-                }
+        
+        // Aliases resolve to directories, causing fileExists(isDirectory:) to return true.
+        // We just verify it exists at all, then delete it.
+        if fm.fileExists(atPath: desktopPath) {
+            do {
+                log("[INFO] Removing desktop shortcut for '\(mount.name)'")
+                try fm.removeItem(atPath: desktopPath)
+            } catch {
+                log("[WARN] Failed to remove desktop shortcut: \(error.localizedDescription)")
             }
         }
     }

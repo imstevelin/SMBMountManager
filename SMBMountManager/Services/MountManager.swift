@@ -22,15 +22,18 @@ class MountManager: ObservableObject {
     /// Health monitor timer
     private var monitorTimer: Timer?
     private var monitorInterval: TimeInterval {
-        return 10.0
+        return 5.0
     }
 
     /// Stale mount tracking
     private var consecutiveFailures: [String: Int] = [:]
-    private let staleThreshold = 5
+    private let staleThreshold = 2
 
     /// Auto-refresh timer for status updates (fix #3: faster updates)
     private var refreshTimer: Timer?
+    
+    /// Subscription to network connectivity changes
+    private var networkCancellable: AnyCancellable?
 
     init() {
         ensureDirectories()
@@ -41,6 +44,7 @@ class MountManager: ObservableObject {
     deinit {
         refreshTimer?.invalidate()
         monitorTimer?.invalidate()
+        networkCancellable?.cancel()
     }
 
     private func startAutoRefresh() {
@@ -50,6 +54,22 @@ class MountManager: ObservableObject {
                 self?.refreshStatuses()
             }
         }
+        
+        // Listen for sudden total network drops and instantly detach
+        networkCancellable = AppLifecycle.shared.networkMonitor?.$isConnected
+            .dropFirst() // Ignore initial value on boot
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] isConnected in
+                guard let self = self, !isConnected else { return }
+                // Network dropped completely. Instantly unmount all to avoid Finder popup timeouts.
+                for mount in self.mounts {
+                    if let _ = self.statuses[mount.name], MountManager.isMounted(mount.mountPath) {
+                        self.forceUnmount(mount.mountPath)
+                    }
+                }
+                self.refreshStatuses()
+            }
     }
 
     // MARK: - Directories
@@ -106,9 +126,11 @@ class MountManager: ObservableObject {
                             status.isResponsive = false
                             status.capacityTotal = nil
                             status.capacityAvailable = nil
+                            status.isNetworkUp = false
                             // Do not show "Paused" solely due to global network drops unless user explicitly paused it
                             status.isPaused = isUserPaused
                         } else {
+                            status.isNetworkUp = true
                             status.isMounted = MountManager.isMounted(mount.mountPath)
                             if status.isMounted {
                                 status.isResponsive = await MountManager.isMountResponsive(mount.mountPath)
@@ -154,8 +176,12 @@ class MountManager: ObservableObject {
                             }
                             status.isPaused = isUserPaused || isNetPaused
                         }
-                        
                         status.isEngineRunning = isEngineRunning && !status.isPaused
+                        if isEngineRunning, let engine = engine {
+                            status.isFailing = await engine.isFailing
+                        } else {
+                            status.isFailing = false
+                        }
 
                         // Measure latency
                         if isEngineRunning, let engine = engine {
@@ -275,13 +301,33 @@ class MountManager: ObservableObject {
     /// Check if a mount is restricted by its allowed SSIDs on the current network
     func isNetworkRestricted(for mount: MountPoint) -> Bool {
         guard !mount.allowedSSIDs.isEmpty else { return false }
-        let currentSSID = AppLifecycle.shared.networkMonitor?.currentSSID ?? WiFiService.currentSSID()
-        if let ssid = currentSSID, !mount.allowedSSIDs.contains(ssid) {
-            return true
-        } else if currentSSID == nil {
+        
+        // Special keyword "乙太網路" bypasses SSID check if currently on Ethernet
+        if mount.allowedSSIDs.contains("乙太網路") {
+            if AppLifecycle.shared.networkMonitor?.interfaceType == .wiredEthernet {
+                return false // Allowed
+            }
+        }
+        
+        // Ensure "乙太網路" is not the only rule if we aren't actually on Ethernet
+        // (If it is, and we aren't on Ethernet, we should restrict)
+        let onlyEthernet = mount.allowedSSIDs.count == 1 && mount.allowedSSIDs.first == "乙太網路"
+        if onlyEthernet {
             return true
         }
-        return false
+        
+        // Otherwise fallback to normal SSID check
+        let currentSSID = AppLifecycle.shared.networkMonitor?.currentSSID ?? WiFiService.currentSSID()
+        if let ssid = currentSSID {
+            if !mount.allowedSSIDs.contains(ssid) && !mount.allowedSSIDs.contains("乙太網路") {
+                return true
+            } else if !mount.allowedSSIDs.contains(ssid) && mount.allowedSSIDs.contains("乙太網路") && AppLifecycle.shared.networkMonitor?.interfaceType != .wiredEthernet {
+                 return true
+            }
+            return false
+        } else {
+            return true // WiFi required but SSID nil
+        }
     }
 
     /// Start engine for a single mount
@@ -685,6 +731,8 @@ class MountManager: ObservableObject {
                     
                     NSApp.activate(ignoringOtherApps: true)
                     let response = alert.runModal()
+                    DispatchQueue.main.async { NSApp.mainWindow?.makeKeyAndOrderFront(nil) }
+                    
                     if response == .alertFirstButtonReturn {
                         let pass = secureField.stringValue
                         let valResult = self.preValidateMount(
@@ -703,6 +751,7 @@ class MountManager: ObservableObject {
                             errorAlert.informativeText = "無法使用此密碼連線到伺服器。\n\(valResult.errorDetail)"
                             NSApp.activate(ignoringOtherApps: true)
                             errorAlert.runModal()
+                            DispatchQueue.main.async { NSApp.mainWindow?.makeKeyAndOrderFront(nil) }
                         }
                     } else {
                         break // User skipped
@@ -829,7 +878,7 @@ class MountManager: ObservableObject {
         // Run synchronously but off the main thread; callers should not block on this
         let task = Process()
         task.launchPath = "/bin/bash"
-        task.arguments = ["-c", "diskutil unmount force \"\(path)\" 2>/dev/null"]
+        task.arguments = ["-c", "/sbin/umount -f \"\(path)\" || diskutil unmount force \"\(path)\" 2>/dev/null"]
         task.standardOutput = FileHandle.nullDevice
         task.standardError = FileHandle.nullDevice
         

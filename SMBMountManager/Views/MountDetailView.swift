@@ -105,10 +105,11 @@ struct MountDetailView: View {
     // MARK: - Sections
 
     private var statusColor: Color {
+        if !status.isNetworkUp { return .secondary }
         if status.isMounted && status.isResponsive { return .green }
         if status.isMounted { return .orange }
         if status.isPaused { return .orange }
-        if status.isEngineRunning { return .yellow }
+        if status.isEngineRunning && !status.isFailing { return .yellow }
         return .red
     }
 

@@ -142,24 +142,28 @@ struct MountStatus: Identifiable {
     var isMounted: Bool = false
     var isResponsive: Bool = false
     var isEngineRunning: Bool = false
+    var isFailing: Bool = false
     var isPaused: Bool = false
+    var isNetworkUp: Bool = true
     var latencyMs: Double? = nil        // Ping latency in ms, nil = unknown
     var capacityTotal: Int64? = nil     // Total volume capacity in bytes
     var capacityAvailable: Int64? = nil // Available capacity in bytes
 
     var overallIcon: String {
+        if !isNetworkUp { return "externaldrive.badge.xmark" }
         if isMounted && isResponsive { return "externaldrive.fill.badge.checkmark" }
         if isMounted && !isResponsive { return "externaldrive.fill.badge.exclamationmark" }
         if isPaused { return "pause.circle.fill" }
-        if isEngineRunning { return "arrow.triangle.2.circlepath" }
+        if isEngineRunning && !isFailing { return "arrow.triangle.2.circlepath" }
         return "externaldrive.badge.xmark"
     }
 
     var statusText: String {
+        if !isNetworkUp { return "未連線" }
         if isMounted && isResponsive { return "已連線" }
         if isMounted && !isResponsive { return "無回應" }
         if isPaused { return "暫停中" }
-        if isEngineRunning { return "連線中…" }
+        if isEngineRunning && !isFailing { return "連線中…" }
         return "未連線"
     }
 

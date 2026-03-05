@@ -61,6 +61,11 @@ struct StatusMenuView: View {
             NSApp.activate(ignoringOtherApps: true)
             DispatchQueue.main.async {
                 openWindow(id: "settings")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "settings" }) {
+                        window.makeKeyAndOrderFront(nil)
+                    }
+                }
             }
         } label: {
             Label("設定…", systemImage: "gearshape")
@@ -68,6 +73,7 @@ struct StatusMenuView: View {
         .keyboardShortcut(",", modifiers: .command)
 
         Button {
+            AppLifecycle.shared.isTerminating = true
             // Force synchronous unmount before we even tell the OS to begin termination
             mountManager.unmountAllAndStopSync()
             NSApp.terminate(nil)
@@ -86,10 +92,11 @@ struct MenuBarMountItem: View {
     @ObservedObject var mountManager: MountManager
 
     var statusColor: Color {
+        if !status.isNetworkUp { return .secondary }
         if status.isMounted && status.isResponsive { return .green }
         if status.isMounted { return .orange }
         if status.isPaused { return .orange }
-        if status.isEngineRunning { return .yellow }
+        if status.isEngineRunning && !status.isFailing { return .yellow }
         return .red
     }
 
