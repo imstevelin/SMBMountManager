@@ -16,15 +16,7 @@
 - **一鍵權限修復 (Helper Tool)**：內建特權輔助工具 (Privileged Helper Tool)，一鍵修復 macOS 常見的 `/Volumes` 掛載權限錯亂問題，保證掛載點穩定建立。
 - **自動建立桌面捷徑**：掛載成功時，可選自動在桌面建立捷徑（Alias）；當網路中斷或退出時，自動清理移除桌面捷徑，保持桌面整潔。
 
-## 📸 介面預覽
-
-*(此處可替換為實際的截圖網址)*
-
-| 選單列狀態 | 掛載點設定 | 詳細資訊介面 |
-| :---: | :---: | :---: |
-| `StatusMenuView` | `AddMountSheet` | `MountDetailView` |
-
-## 🚀 安裝與執行
+##  安裝與執行
 
 ### 從 Release 下載安裝
 1. 前往本專案的 [Releases](https://github.com/imstevelin/smbmountmanager/releases) 頁面。
