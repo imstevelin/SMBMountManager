@@ -1,0 +1,34 @@
+name: SMBMountManager
+options:
+  bundleIdPrefix: org.imstevelin
+  deploymentTarget:
+    macOS: "26.0"
+  xcodeVersion: "16.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MACOSX_DEPLOYMENT_TARGET: "26.0"
+
+targets:
+  SMBMountManager:
+    type: application
+    platform: macOS
+    sources:
+      - path: SMBMountManager
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.imstevelin.SMBMountManager
+        PRODUCT_NAME: SMB掛載管理器
+        MARKETING_VERSION: "3.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        INFOPLIST_FILE: SMBMountManager/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: SMBMountManager/Resources/SMBMountManager.entitlements
+        GENERATE_INFOPLIST_FILE: false
+        COMBINE_HIDPI_IMAGES: true
+        LD_RUNPATH_SEARCH_PATHS:
+          - $(inherited)
+          - "@executable_path/../Frameworks"
+        ENABLE_APP_SANDBOX: false
+        SWIFT_EMIT_LOC_STRINGS: true

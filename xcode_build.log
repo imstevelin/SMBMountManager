@@ -1,0 +1,402 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -scheme SMBMountManager clean build
+
+2026-03-05 03:26:48.718 xcodebuild[23407:179780] [MT] IDERunDestination: Supported platforms for the buildables in the current scheme is empty.
+--- xcodebuild: WARNING: Using the first of multiple matching destinations:
+{ platform:macOS, arch:arm64, id:00008103-000449A13CDA001E, name:My Mac }
+{ platform:macOS, arch:x86_64, id:00008103-000449A13CDA001E, name:My Mac }
+{ platform:macOS, name:Any Mac }
+CreateBuildRequest
+
+SendProjectDescription
+
+CreateBuildOperation
+
+** CLEAN SUCCEEDED **
+
+--- xcodebuild: WARNING: Using the first of multiple matching destinations:
+{ platform:macOS, arch:arm64, id:00008103-000449A13CDA001E, name:My Mac }
+{ platform:macOS, arch:x86_64, id:00008103-000449A13CDA001E, name:My Mac }
+{ platform:macOS, name:Any Mac }
+ComputePackagePrebuildTargetDependencyGraph
+
+Prepare packages
+
+CreateBuildRequest
+
+SendProjectDescription
+
+CreateBuildOperation
+
+ComputeTargetDependencyGraph
+note: Building targets in dependency order
+note: Target dependency graph (1 target)
+    Target 'SMBMountManager' in project 'SMBMountManager' (no dependencies)
+
+GatherProvisioningInputs
+
+CreateBuildDescription
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc --version
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld -version_details
+
+Build description signature: e6b7162266b66576fa8c3f2b20a7f14a
+Build description path: /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/XCBuildData/e6b7162266b66576fa8c3f2b20a7f14a.xcbuilddata
+ClangStatCache /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk /Users/imstevelin/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/macosx26.2-25C58-00fa09913b459cbbc988d1f6730289ae.sdkstatcache
+    cd /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager.xcodeproj
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk -o /Users/imstevelin/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/macosx26.2-25C58-00fa09913b459cbbc988d1f6730289ae.sdkstatcache
+
+CreateBuildDirectory /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products
+    cd /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager.xcodeproj
+    builtin-create-build-directory /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products
+
+CreateBuildDirectory /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex
+    cd /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager.xcodeproj
+    builtin-create-build-directory /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex
+
+CreateBuildDirectory /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/ExplicitPrecompiledModules
+    cd /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager.xcodeproj
+    builtin-create-build-directory /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/ExplicitPrecompiledModules
+
+CreateBuildDirectory /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules
+    cd /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager.xcodeproj
+    builtin-create-build-directory /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules
+
+CreateBuildDirectory /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/EagerLinkingTBDs/Debug
+    cd /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager.xcodeproj
+    builtin-create-build-directory /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/EagerLinkingTBDs/Debug
+
+WriteAuxiliaryFile /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager-2d2295931b9d364492e0267fd69fcc19-VFS/all-product-headers.yaml
+    cd /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager.xcodeproj
+    write-file /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager-2d2295931b9d364492e0267fd69fcc19-VFS/all-product-headers.yaml
+
+CreateBuildDirectory /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug
+    cd /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager.xcodeproj
+    builtin-create-build-directory /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug
+
+WriteAuxiliaryFile /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器.DependencyMetadataFileList (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    write-file /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器.DependencyMetadataFileList
+
+WriteAuxiliaryFile /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-project-headers.hmap (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    write-file /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-project-headers.hmap
+
+WriteAuxiliaryFile /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器.DependencyStaticMetadataFileList (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    write-file /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器.DependencyStaticMetadataFileList
+
+WriteAuxiliaryFile /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-own-target-headers.hmap (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    write-file /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-own-target-headers.hmap
+
+WriteAuxiliaryFile /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-generated-files.hmap (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    write-file /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-generated-files.hmap
+
+WriteAuxiliaryFile /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器.hmap (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    write-file /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器.hmap
+
+WriteAuxiliaryFile /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-all-target-headers.hmap (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    write-file /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-all-target-headers.hmap
+
+WriteAuxiliaryFile /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-all-non-framework-target-headers.hmap (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    write-file /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-all-non-framework-target-headers.hmap
+
+WriteAuxiliaryFile /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-DebugDylibPath-normal-arm64.txt (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    write-file /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-DebugDylibPath-normal-arm64.txt
+
+WriteAuxiliaryFile /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-DebugDylibInstallName-normal-arm64.txt (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    write-file /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-DebugDylibInstallName-normal-arm64.txt
+
+WriteAuxiliaryFile /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器.SwiftFileList (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    write-file /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器.SwiftFileList
+
+WriteAuxiliaryFile /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器.LinkFileList (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    write-file /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器.LinkFileList
+
+WriteAuxiliaryFile /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器.SwiftConstValuesFileList (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    write-file /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器.SwiftConstValuesFileList
+
+WriteAuxiliaryFile /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMBMountManager_const_extract_protocols.json (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    write-file /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMBMountManager_const_extract_protocols.json
+
+WriteAuxiliaryFile /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMBMountManager-OutputFileMap.json (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    write-file /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMBMountManager-OutputFileMap.json
+
+WriteAuxiliaryFile /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/DerivedSources/Entitlements.plist (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    write-file /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/DerivedSources/Entitlements.plist
+
+MkDir /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents/Resources (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    /bin/mkdir -p /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents/Resources
+
+MkDir /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents/MacOS (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    /bin/mkdir -p /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents/MacOS
+
+MkDir /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    /bin/mkdir -p /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents
+
+MkDir /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    /bin/mkdir -p /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app
+
+ProcessProductPackaging /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Resources/SMBMountManager.entitlements /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器.app.xcent (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    
+    Entitlements:
+    
+    {
+    "com.apple.security.files.user-selected.read-write" = 1;
+    "com.apple.security.get-task-allow" = 1;
+}
+    
+    builtin-productPackagingUtility /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Resources/SMBMountManager.entitlements -entitlements -format xml -o /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器.app.xcent
+
+ProcessProductPackagingDER /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器.app.xcent /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器.app.xcent.der (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    /usr/bin/derq query -f xml -i /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器.app.xcent -o /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器.app.xcent.der --raw
+
+Ld /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents/MacOS/__preview.dylib normal (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target arm64-apple-macos26.0 -dynamiclib -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk -O0 -L/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug -F/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug -install_name @rpath/SMB掛載管理器.debug.dylib -rdynamic -Xlinker -no_deduplicate -Xlinker -dependency_info -Xlinker /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器_dependency_info.dat -Xlinker -no_adhoc_codesign -o /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents/MacOS/__preview.dylib
+
+CpResource /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents/Resources/AppIcon.icns /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Resources/AppIcon.icns (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Resources/AppIcon.icns /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents/Resources
+
+ProcessInfoPlistFile /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents/Info.plist /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Resources/Info.plist (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    builtin-infoPlistUtility /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Resources/Info.plist -producttype com.apple.product-type.application -genpkginfo /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents/PkgInfo -expandbuildsettings -platform macosx -o /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents/Info.plist
+
+SwiftDriver SMBMountManager normal arm64 com.apple.xcode.tools.swift.compiler (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    builtin-SwiftDriver -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name SMB掛載管理器 -Onone -enforce-exclusivity\=checked @/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器.SwiftFileList -DDEBUG -enable-bare-slash-regex -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk -target arm64-apple-macos26.0 -g -module-cache-path /Users/imstevelin/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug -F /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug -emit-localized-strings -emit-localized-strings-path /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64 -c -j8 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/imstevelin/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/macosx26.2-25C58-00fa09913b459cbbc988d1f6730289ae.sdkstatcache -output-file-map /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMBMountManager-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/imstevelin/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -sdk-module-cache-path /Users/imstevelin/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/imstevelin/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMBMountManager_const_extract_protocols.json -Xcc -iquote -Xcc /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-generated-files.hmap -Xcc -I/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-own-target-headers.hmap -Xcc -I/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-all-target-headers.hmap -Xcc -iquote -Xcc /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-project-headers.hmap -Xcc -I/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/include -Xcc -I/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/DerivedSources-normal/arm64 -Xcc -I/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/DerivedSources/arm64 -Xcc -I/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器-Swift.h -working-directory /Users/imstevelin/本地儲存/SMBMountManager -experimental-emit-module-separately -disable-cmo
+
+SwiftCompile normal arm64 Compiling\ LaunchdService.swift,\ MainSettingsView.swift /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Services/LaunchdService.swift /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Views/MainSettingsView.swift (in target 'SMBMountManager' from project 'SMBMountManager')
+
+SwiftCompile normal arm64 /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Services/LaunchdService.swift (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    
+
+SwiftCompile normal arm64 /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Views/MainSettingsView.swift (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    
+/Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Views/MainSettingsView.swift:580:18: warning: 'onChange(of:perform:)' was deprecated in macOS 14.0: Use `onChange` with a two or zero parameter action closure instead.
+                .onChange(of: selectedLog) { _ in refreshLog() }
+                 ^
+/Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Views/MainSettingsView.swift:634:18: warning: 'onChange(of:perform:)' was deprecated in macOS 14.0: Use `onChange` with a two or zero parameter action closure instead.
+                .onChange(of: logContent) { _ in
+                 ^
+
+SwiftEmitModule normal arm64 Emitting\ module\ for\ SMB掛載管理器 (in target 'SMBMountManager' from project 'SMBMountManager')
+
+EmitSwiftModule normal arm64 (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    
+
+SwiftCompile normal arm64 Compiling\ SMBMountManagerApp.swift /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/SMBMountManagerApp.swift (in target 'SMBMountManager' from project 'SMBMountManager')
+
+SwiftCompile normal arm64 /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/SMBMountManagerApp.swift (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    
+
+SwiftCompile normal arm64 Compiling\ MountManager.swift,\ MountPoint.swift /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Services/MountManager.swift /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Models/MountPoint.swift (in target 'SMBMountManager' from project 'SMBMountManager')
+
+SwiftCompile normal arm64 /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Services/MountManager.swift (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    
+/Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Services/MountManager.swift:278:34: warning: result of call to 'restartEngine(name:)' is unused
+                            self.restartEngine(name: mount.name)
+                                 ^            ~~~~~~~~~~~~~~~~~~
+
+SwiftCompile normal arm64 /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Models/MountPoint.swift (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    
+
+SwiftCompile normal arm64 Compiling\ MountDetailView.swift,\ MountEngine.swift /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Views/MountDetailView.swift /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Services/MountEngine.swift (in target 'SMBMountManager' from project 'SMBMountManager')
+
+SwiftCompile normal arm64 /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Views/MountDetailView.swift (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    
+
+SwiftCompile normal arm64 /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Services/MountEngine.swift (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    
+
+SwiftCompile normal arm64 Compiling\ StatusMenuView.swift /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Views/StatusMenuView.swift (in target 'SMBMountManager' from project 'SMBMountManager')
+
+SwiftCompile normal arm64 /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Views/StatusMenuView.swift (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    
+
+SwiftCompile normal arm64 Compiling\ AddMountSheet.swift,\ AppSettings.swift /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Views/AddMountSheet.swift /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Services/AppSettings.swift (in target 'SMBMountManager' from project 'SMBMountManager')
+
+SwiftCompile normal arm64 /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Views/AddMountSheet.swift (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    
+/Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Views/AddMountSheet.swift:140:34: warning: 'onChange(of:perform:)' was deprecated in macOS 14.0: Use `onChange` with a two or zero parameter action closure instead.
+                                .onChange(of: name) { newValue in
+                                 ^
+/Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Views/AddMountSheet.swift:160:30: warning: 'onChange(of:perform:)' was deprecated in macOS 14.0: Use `onChange` with a two or zero parameter action closure instead.
+                            .onChange(of: shareMatchesName) { matched in
+                             ^
+/Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Views/AddMountSheet.swift:199:30: warning: 'onChange(of:perform:)' was deprecated in macOS 14.0: Use `onChange` with a two or zero parameter action closure instead.
+                            .onChange(of: showInSidebar) { newValue in
+                             ^
+/Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Views/AddMountSheet.swift:213:30: warning: 'onChange(of:perform:)' was deprecated in macOS 14.0: Use `onChange` with a two or zero parameter action closure instead.
+                            .onChange(of: optNobrowse) { newValue in
+                             ^
+/Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Views/AddMountSheet.swift:462:26: warning: main actor-isolated property 'mountManager' cannot be accessed from outside of the actor; this is an error in the Swift 6 language mode
+            let result = mountManager.preValidateMount(
+                         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                         await 
+
+SwiftCompile normal arm64 /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Services/AppSettings.swift (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    
+
+SwiftCompile normal arm64 Compiling\ NetworkMonitorService.swift,\ NotificationService.swift /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Services/NetworkMonitorService.swift /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Services/NotificationService.swift (in target 'SMBMountManager' from project 'SMBMountManager')
+
+SwiftCompile normal arm64 /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Services/NetworkMonitorService.swift (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    
+
+SwiftCompile normal arm64 /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Services/NotificationService.swift (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    
+
+SwiftCompile normal arm64 Compiling\ ConnectionTestView.swift,\ KeychainService.swift /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Views/ConnectionTestView.swift /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Services/KeychainService.swift (in target 'SMBMountManager' from project 'SMBMountManager')
+
+SwiftCompile normal arm64 /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Views/ConnectionTestView.swift (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    
+
+SwiftCompile normal arm64 /Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Services/KeychainService.swift (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    
+
+SwiftDriverJobDiscovery normal arm64 Emitting module for SMB掛載管理器 (in target 'SMBMountManager' from project 'SMBMountManager')
+
+SwiftDriver\ Compilation\ Requirements SMBMountManager normal arm64 com.apple.xcode.tools.swift.compiler (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    builtin-Swift-Compilation-Requirements -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name SMB掛載管理器 -Onone -enforce-exclusivity\=checked @/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器.SwiftFileList -DDEBUG -enable-bare-slash-regex -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk -target arm64-apple-macos26.0 -g -module-cache-path /Users/imstevelin/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug -F /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug -emit-localized-strings -emit-localized-strings-path /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64 -c -j8 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/imstevelin/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/macosx26.2-25C58-00fa09913b459cbbc988d1f6730289ae.sdkstatcache -output-file-map /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMBMountManager-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/imstevelin/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -sdk-module-cache-path /Users/imstevelin/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/imstevelin/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMBMountManager_const_extract_protocols.json -Xcc -iquote -Xcc /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-generated-files.hmap -Xcc -I/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-own-target-headers.hmap -Xcc -I/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-all-target-headers.hmap -Xcc -iquote -Xcc /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-project-headers.hmap -Xcc -I/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/include -Xcc -I/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/DerivedSources-normal/arm64 -Xcc -I/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/DerivedSources/arm64 -Xcc -I/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器-Swift.h -working-directory /Users/imstevelin/本地儲存/SMBMountManager -experimental-emit-module-separately -disable-cmo
+
+SwiftDriverJobDiscovery normal arm64 Compiling StatusMenuView.swift (in target 'SMBMountManager' from project 'SMBMountManager')
+
+SwiftDriverJobDiscovery normal arm64 Compiling SMBMountManagerApp.swift (in target 'SMBMountManager' from project 'SMBMountManager')
+
+SwiftMergeGeneratedHeaders /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/DerivedSources/SMB掛載管理器-Swift.h /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器-Swift.h (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    builtin-swiftHeaderTool -arch arm64 /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器-Swift.h -o /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/DerivedSources/SMB掛載管理器-Swift.h
+
+Copy /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.swiftmodule/arm64-apple-macos.swiftmodule /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器.swiftmodule (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器.swiftmodule /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.swiftmodule/arm64-apple-macos.swiftmodule
+
+Copy /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.swiftmodule/arm64-apple-macos.swiftdoc /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器.swiftdoc (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器.swiftdoc /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.swiftmodule/arm64-apple-macos.swiftdoc
+
+Copy /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.swiftmodule/arm64-apple-macos.abi.json /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器.abi.json (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器.abi.json /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.swiftmodule/arm64-apple-macos.abi.json
+
+Copy /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.swiftmodule/Project/arm64-apple-macos.swiftsourceinfo /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器.swiftsourceinfo (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器.swiftsourceinfo /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.swiftmodule/Project/arm64-apple-macos.swiftsourceinfo
+
+SwiftDriverJobDiscovery normal arm64 Compiling NetworkMonitorService.swift, NotificationService.swift (in target 'SMBMountManager' from project 'SMBMountManager')
+
+SwiftDriverJobDiscovery normal arm64 Compiling MountDetailView.swift, MountEngine.swift (in target 'SMBMountManager' from project 'SMBMountManager')
+
+SwiftDriverJobDiscovery normal arm64 Compiling MountManager.swift, MountPoint.swift (in target 'SMBMountManager' from project 'SMBMountManager')
+
+SwiftDriverJobDiscovery normal arm64 Compiling ConnectionTestView.swift, KeychainService.swift (in target 'SMBMountManager' from project 'SMBMountManager')
+
+SwiftDriverJobDiscovery normal arm64 Compiling AddMountSheet.swift, AppSettings.swift (in target 'SMBMountManager' from project 'SMBMountManager')
+
+SwiftDriverJobDiscovery normal arm64 Compiling LaunchdService.swift, MainSettingsView.swift (in target 'SMBMountManager' from project 'SMBMountManager')
+
+SwiftDriver\ Compilation SMBMountManager normal arm64 com.apple.xcode.tools.swift.compiler (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    builtin-Swift-Compilation -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name SMB掛載管理器 -Onone -enforce-exclusivity\=checked @/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器.SwiftFileList -DDEBUG -enable-bare-slash-regex -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk -target arm64-apple-macos26.0 -g -module-cache-path /Users/imstevelin/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug -F /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug -emit-localized-strings -emit-localized-strings-path /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64 -c -j8 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/imstevelin/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/macosx26.2-25C58-00fa09913b459cbbc988d1f6730289ae.sdkstatcache -output-file-map /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMBMountManager-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/imstevelin/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -sdk-module-cache-path /Users/imstevelin/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/imstevelin/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMBMountManager_const_extract_protocols.json -Xcc -iquote -Xcc /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-generated-files.hmap -Xcc -I/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-own-target-headers.hmap -Xcc -I/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-all-target-headers.hmap -Xcc -iquote -Xcc /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-project-headers.hmap -Xcc -I/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/include -Xcc -I/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/DerivedSources-normal/arm64 -Xcc -I/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/DerivedSources/arm64 -Xcc -I/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器-Swift.h -working-directory /Users/imstevelin/本地儲存/SMBMountManager -experimental-emit-module-separately -disable-cmo
+
+Ld /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents/MacOS/SMB掛載管理器.debug.dylib normal (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target arm64-apple-macos26.0 -dynamiclib -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk -O0 -L/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/EagerLinkingTBDs/Debug -L/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug -F/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/EagerLinkingTBDs/Debug -F/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug -filelist /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器.LinkFileList -install_name @rpath/SMB掛載管理器.debug.dylib -Xlinker -rpath -Xlinker @executable_path/../Frameworks -Xlinker -object_path_lto -Xlinker /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器_lto.o -rdynamic -Xlinker -no_deduplicate -Xlinker -dependency_info -Xlinker /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器_dependency_info.dat -fobjc-link-runtime -L/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/macosx -L/usr/lib/swift -Xlinker -add_ast_path -Xlinker /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器.swiftmodule @/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器-linker-args.resp -Xlinker -alias -Xlinker _main -Xlinker ___debug_main_executable_dylib_entry_point -Xlinker -no_adhoc_codesign -o /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents/MacOS/SMB掛載管理器.debug.dylib
+
+ConstructStubExecutorLinkFileList /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-ExecutorLinkFileList-normal-arm64.txt (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    construct-stub-executor-link-file-list /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents/MacOS/SMB掛載管理器.debug.dylib /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib/libPreviewsJITStubExecutor_no_swift_entry_point.a /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib/libPreviewsJITStubExecutor.a --output /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-ExecutorLinkFileList-normal-arm64.txt
+note: Using stub executor library with Swift entry point. (in target 'SMBMountManager' from project 'SMBMountManager')
+
+Ld /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents/MacOS/SMB掛載管理器 normal (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target arm64-apple-macos26.0 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk -O0 -L/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug -F/Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug -Xlinker -rpath -Xlinker @executable_path -Xlinker -rpath -Xlinker @executable_path/../Frameworks -rdynamic -Xlinker -no_deduplicate -e ___debug_blank_executor_main -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __debug_dylib -Xlinker /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-DebugDylibPath-normal-arm64.txt -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __debug_instlnm -Xlinker /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-DebugDylibInstallName-normal-arm64.txt -Xlinker -filelist -Xlinker /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器-ExecutorLinkFileList-normal-arm64.txt /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents/MacOS/SMB掛載管理器.debug.dylib -Xlinker -no_adhoc_codesign -o /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents/MacOS/SMB掛載管理器
+
+CopySwiftLibs /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    builtin-swiftStdLibTool --copy --verbose --sign - --scan-executable /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents/MacOS/SMB掛載管理器.debug.dylib --scan-folder /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents/Frameworks --scan-folder /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents/PlugIns --scan-folder /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents/Library/SystemExtensions --scan-folder /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents/Extensions --platform macosx --toolchain /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --destination /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents/Frameworks --strip-bitcode --strip-bitcode-tool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os
+
+ExtractAppIntentsMetadata (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsmetadataprocessor --toolchain-dir /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --module-name SMB掛載管理器 --sdk-root /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk --xcode-version 17C529 --platform-family macOS --deployment-target 26.0 --bundle-identifier org.imstevelin.SMBMountManager --output /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents/Resources --target-triple arm64-apple-macos26.0 --binary-file /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents/MacOS/SMB掛載管理器 --dependency-file /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器_dependency_info.dat --stringsdata-file /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/ExtractedAppShortcutsMetadata.stringsdata --source-file-list /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器.SwiftFileList --metadata-file-list /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器.DependencyMetadataFileList --static-metadata-file-list /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器.DependencyStaticMetadataFileList --swift-const-vals-list /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器.SwiftConstValuesFileList --compile-time-extraction --deployment-aware-processing --validate-assistant-intents --no-app-shortcuts-localization
+2026-03-05 03:26:52.126 appintentsmetadataprocessor[23440:180172] Starting appintentsmetadataprocessor export
+2026-03-05 03:26:52.127 appintentsmetadataprocessor[23440:180172] warning: Metadata extraction skipped. No AppIntents.framework dependency found.
+
+CodeSign /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents/MacOS/SMB掛載管理器.debug.dylib (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents/MacOS/SMB掛載管理器.debug.dylib
+
+CodeSign /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents/MacOS/__preview.dylib (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app/Contents/MacOS/__preview.dylib
+
+CodeSign /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --entitlements /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Intermediates.noindex/SMBMountManager.build/Debug/SMBMountManager.build/SMB掛載管理器.app.xcent --timestamp\=none --generate-entitlement-der /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app
+
+RegisterExecutionPolicyException /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    builtin-RegisterExecutionPolicyException /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app
+
+Validate /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    builtin-validationUtility /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app -no-validate-extension -infoplist-subpath Contents/Info.plist
+
+Touch /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    /usr/bin/touch -c /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app
+
+RegisterWithLaunchServices /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app (in target 'SMBMountManager' from project 'SMBMountManager')
+    cd /Users/imstevelin/本地儲存/SMBMountManager
+    /System/Library/Frameworks/CoreServices.framework/Versions/Current/Frameworks/LaunchServices.framework/Versions/Current/Support/lsregister -f -R -trusted /Users/imstevelin/Library/Developer/Xcode/DerivedData/SMBMountManager-asypldopqudmqybpfowqzykaqbnq/Build/Products/Debug/SMB掛載管理器.app
+
+** BUILD SUCCEEDED **
+
