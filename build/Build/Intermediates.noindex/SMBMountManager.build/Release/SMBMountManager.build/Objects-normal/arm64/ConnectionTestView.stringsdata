@@ -1,0 +1,56 @@
+{
+  "source": "/Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Views/ConnectionTestView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "伺服器連線測試",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 26
+        }
+      },
+      {
+        "comment": "",
+        "key": "測試 SMB 伺服器的連線狀態",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 28
+        }
+      },
+      {
+        "comment": "",
+        "key": "伺服器位址 (例如: nas.local 或 192.168.1.100)",
+        "location": {
+          "startingColumn": 35,
+          "startingLine": 46
+        }
+      },
+      {
+        "comment": "",
+        "key": "測試",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 62
+        }
+      },
+      {
+        "comment": "",
+        "key": "輸入伺服器位址後按「測試」開始",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 92
+        }
+      },
+      {
+        "comment": "",
+        "key": "關閉",
+        "location": {
+          "startingColumn": 24,
+          "startingLine": 106
+        }
+      }
+    ]
+  },
+  "version": 1
+}

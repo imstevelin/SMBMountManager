@@ -1,0 +1,12 @@
+{
+  "/Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Views/AddMountSheet.swift" : {
+    "abi-baseline-json" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器.abi.json",
+    "const-values" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/SMBMountManager-primary.swiftconstvalues",
+    "dependencies" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/SMBMountManager-primary.d",
+    "diagnostics" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/SMBMountManager-primary.dia",
+    "objc-header" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器-Swift.h",
+    "swiftdoc" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器.swiftdoc",
+    "swiftmodule" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器.swiftmodule",
+    "swiftsourceinfo" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/SMB掛載管理器.swiftsourceinfo"
+  }
+}

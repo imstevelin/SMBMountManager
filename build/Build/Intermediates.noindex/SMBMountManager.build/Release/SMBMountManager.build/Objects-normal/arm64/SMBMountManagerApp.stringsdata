@@ -1,0 +1,24 @@
+{
+  "source": "/Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/SMBMountManagerApp.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "SMB 掛載管理器",
+        "location": {
+          "startingColumn": 16,
+          "startingLine": 23
+        }
+      },
+      {
+        "comment": "",
+        "key": "%lld/%lld",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 70
+        }
+      }
+    ]
+  },
+  "version": 1
+}
