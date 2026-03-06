@@ -285,13 +285,22 @@ struct AddMountSheet: View {
                             } message: {
                                 Text("目前未連線到 Wi-Fi 或未授予「定位服務」權限，因此無法偵測。")
                             }
+
+                            Button {
+                                if !allowedSSIDs.contains("乙太網路") {
+                                    allowedSSIDs.append("乙太網路")
+                                }
+                            } label: {
+                                Label("加入乙太網路", systemImage: "network")
+                            }
+                            .controlSize(.small)
                         }
 
                         if !allowedSSIDs.isEmpty {
                             FlowLayout(spacing: 6) {
                                 ForEach(allowedSSIDs, id: \.self) { ssid in
                                     HStack(spacing: 4) {
-                                        Image(systemName: "wifi")
+                                        Image(systemName: ssid == "乙太網路" ? "network" : "wifi")
                                             .font(.caption2)
                                         Text(ssid)
                                             .font(.caption)

@@ -66,8 +66,9 @@ actor MountEngine {
                 try? await Task.sleep(for: .seconds(mountedCheckInterval))
                 continue
             } else {
-                // If it suddenly became unmounted, ensure shortcut is removed
-                if mount.createDesktopShortcut {
+                // If it suddenly became unmounted, ensure shortcut is removed only after a few confirmed failures
+                // to prevent temporary network flapping from making the icon disappear constantly.
+                if mount.createDesktopShortcut && _failCount > 1 {
                     removeDesktopAlias()
                 }
             }

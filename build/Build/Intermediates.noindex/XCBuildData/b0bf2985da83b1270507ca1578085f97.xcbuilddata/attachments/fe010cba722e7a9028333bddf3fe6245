@@ -1,0 +1,91 @@
+{
+  "" : {
+    "const-values" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/SMBMountManager-primary.swiftconstvalues",
+    "dependencies" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/SMBMountManager-primary.d",
+    "diagnostics" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/SMBMountManager-primary.dia",
+    "emit-module-dependencies" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/SMBMountManager-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/SMBMountManager-primary-emit-module.dia",
+    "pch" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/SMBMountManager-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/SMBMountManager-primary.swiftdeps"
+  },
+  "/Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Models/MountPoint.swift" : {
+    "index-unit-output-path" : "/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/MountPoint.o",
+    "llvm-bc" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/MountPoint.bc",
+    "object" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/MountPoint.o"
+  },
+  "/Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/SMBMountManagerApp.swift" : {
+    "index-unit-output-path" : "/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/SMBMountManagerApp.o",
+    "llvm-bc" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/SMBMountManagerApp.bc",
+    "object" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/SMBMountManagerApp.o"
+  },
+  "/Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Services/AppSettings.swift" : {
+    "index-unit-output-path" : "/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/AppSettings.o",
+    "llvm-bc" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/AppSettings.bc",
+    "object" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/AppSettings.o"
+  },
+  "/Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Services/KeychainService.swift" : {
+    "index-unit-output-path" : "/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/KeychainService.o",
+    "llvm-bc" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/KeychainService.bc",
+    "object" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/KeychainService.o"
+  },
+  "/Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Services/LaunchdService.swift" : {
+    "index-unit-output-path" : "/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/LaunchdService.o",
+    "llvm-bc" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/LaunchdService.bc",
+    "object" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/LaunchdService.o"
+  },
+  "/Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Services/MountEngine.swift" : {
+    "index-unit-output-path" : "/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/MountEngine.o",
+    "llvm-bc" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/MountEngine.bc",
+    "object" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/MountEngine.o"
+  },
+  "/Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Services/MountManager.swift" : {
+    "index-unit-output-path" : "/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/MountManager.o",
+    "llvm-bc" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/MountManager.bc",
+    "object" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/MountManager.o"
+  },
+  "/Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Services/NetworkMonitorService.swift" : {
+    "index-unit-output-path" : "/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/NetworkMonitorService.o",
+    "llvm-bc" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/NetworkMonitorService.bc",
+    "object" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/NetworkMonitorService.o"
+  },
+  "/Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Services/NotificationService.swift" : {
+    "index-unit-output-path" : "/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/NotificationService.o",
+    "llvm-bc" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/NotificationService.bc",
+    "object" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/NotificationService.o"
+  },
+  "/Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Services/WiFiService.swift" : {
+    "index-unit-output-path" : "/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/WiFiService.o",
+    "llvm-bc" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/WiFiService.bc",
+    "object" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/WiFiService.o"
+  },
+  "/Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Views/AddMountSheet.swift" : {
+    "index-unit-output-path" : "/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/AddMountSheet.o",
+    "llvm-bc" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/AddMountSheet.bc",
+    "object" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/AddMountSheet.o"
+  },
+  "/Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Views/ConnectionTestView.swift" : {
+    "index-unit-output-path" : "/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/ConnectionTestView.o",
+    "llvm-bc" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/ConnectionTestView.bc",
+    "object" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/ConnectionTestView.o"
+  },
+  "/Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Views/FlowLayout.swift" : {
+    "index-unit-output-path" : "/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/FlowLayout.o",
+    "llvm-bc" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/FlowLayout.bc",
+    "object" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/FlowLayout.o"
+  },
+  "/Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Views/MainSettingsView.swift" : {
+    "index-unit-output-path" : "/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/MainSettingsView.o",
+    "llvm-bc" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/MainSettingsView.bc",
+    "object" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/MainSettingsView.o"
+  },
+  "/Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Views/MountDetailView.swift" : {
+    "index-unit-output-path" : "/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/MountDetailView.o",
+    "llvm-bc" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/MountDetailView.bc",
+    "object" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/MountDetailView.o"
+  },
+  "/Users/imstevelin/本地儲存/SMBMountManager/SMBMountManager/Views/StatusMenuView.swift" : {
+    "index-unit-output-path" : "/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/StatusMenuView.o",
+    "llvm-bc" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/StatusMenuView.bc",
+    "object" : "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Intermediates.noindex/SMBMountManager.build/Release/SMBMountManager.build/Objects-normal/arm64/StatusMenuView.o"
+  }
+}

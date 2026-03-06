@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		1524674B069F462F8ED4A727 /* MountEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2BE2E966357301663AF2E6 /* MountEngine.swift */; };
 		1864D93C8B48D3F61D7DBC07 /* MountManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C344C0B09CC2F559CD2E7917 /* MountManager.swift */; };
+		26F4AF1C225CFB74677D4244 /* UpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8487FF49C416CEFB6757182D /* UpdateService.swift */; };
 		2A70A6A3DD0E4E72E4DD18F0 /* WiFiService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3002A4AF23CC569AF519D66 /* WiFiService.swift */; };
 		2B9144783A2F3CDEB44F020D /* SMBMountManagerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1CBD898351825B135B25D81 /* SMBMountManagerApp.swift */; };
 		3EA4567265ADA477D0EF4F9E /* StatusMenuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 551F7631DCF024BB47BE3AF4 /* StatusMenuView.swift */; };
@@ -40,6 +41,7 @@
 		7C15D4F5A096E60078BE7292 /* NetworkMonitorService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitorService.swift; sourceTree = "<group>"; };
 		7CE2C22274E42F3D162681B3 /* LaunchdService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchdService.swift; sourceTree = "<group>"; };
 		7EB9EF70AA8674397F41E19F /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
+		8487FF49C416CEFB6757182D /* UpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateService.swift; sourceTree = "<group>"; };
 		A795F624CFF44AB853281CFA /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		B4CA2B2BC2B556491880C7DF /* MountPoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MountPoint.swift; sourceTree = "<group>"; };
 		C344C0B09CC2F559CD2E7917 /* MountManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MountManager.swift; sourceTree = "<group>"; };
@@ -89,6 +91,7 @@
 				C344C0B09CC2F559CD2E7917 /* MountManager.swift */,
 				7C15D4F5A096E60078BE7292 /* NetworkMonitorService.swift */,
 				78E710F648AA956EA391EFF0 /* NotificationService.swift */,
+				8487FF49C416CEFB6757182D /* UpdateService.swift */,
 				F3002A4AF23CC569AF519D66 /* WiFiService.swift */,
 			);
 			path = Services;
@@ -204,6 +207,7 @@
 				B5087423F235BBAB2B71B8AE /* NotificationService.swift in Sources */,
 				2B9144783A2F3CDEB44F020D /* SMBMountManagerApp.swift in Sources */,
 				3EA4567265ADA477D0EF4F9E /* StatusMenuView.swift in Sources */,
+				26F4AF1C225CFB74677D4244 /* UpdateService.swift in Sources */,
 				2A70A6A3DD0E4E72E4DD18F0 /* WiFiService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -280,7 +284,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = SMBMountManager/Resources/SMBMountManager.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				ENABLE_APP_SANDBOX = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SMBMountManager/Resources/Info.plist;
@@ -288,7 +292,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = org.imstevelin.SMBMountManager;
 				PRODUCT_NAME = "SMB掛載管理器";
 				SDKROOT = macosx;
@@ -302,7 +306,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = SMBMountManager/Resources/SMBMountManager.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				ENABLE_APP_SANDBOX = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SMBMountManager/Resources/Info.plist;
@@ -310,7 +314,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = org.imstevelin.SMBMountManager;
 				PRODUCT_NAME = "SMB掛載管理器";
 				SDKROOT = macosx;

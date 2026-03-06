@@ -8,6 +8,7 @@ class AppSettings: ObservableObject {
 
     @AppStorage("showNotifications") var showNotifications: Bool = true
     @AppStorage("showMountCount") var showMountCount: Bool = true
+    @AppStorage("autoCheckUpdates") var autoCheckUpdates: Bool = true
     @AppStorage("launchAtLogin") var launchAtLogin: Bool = false {
         didSet { updateLoginItem() }
     }

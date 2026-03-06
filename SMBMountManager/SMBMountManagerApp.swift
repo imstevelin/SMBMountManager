@@ -53,6 +53,9 @@ class AppLifecycle {
     static let shared = AppLifecycle()
     weak var mountManager: MountManager?
     weak var networkMonitor: NetworkMonitorService?
+    var isTerminating: Bool = false
+    var isSleeping: Bool = false
+    var lastWakeTime: Date? = nil
 }
 
 // MARK: - Menu Bar Label (animated icon + connection count)
@@ -80,9 +83,29 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     func applicationDidFinishLaunching(_ notification: Notification) {
         UNUserNotificationCenter.current().delegate = self
         NotificationService.requestPermission()
+        
+        if AppSettings.shared.autoCheckUpdates {
+            UpdateService.shared.checkForUpdates(manual: false)
+        }
+        
+        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(macDidSleep), name: NSWorkspace.willSleepNotification, object: nil)
+        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(macDidWake), name: NSWorkspace.didWakeNotification, object: nil)
+    }
+    
+    @objc private func macDidSleep() {
+        AppLifecycle.shared.isSleeping = true
+    }
+    
+    @objc private func macDidWake() {
+        AppLifecycle.shared.isSleeping = false
+        AppLifecycle.shared.lastWakeTime = Date()
+        
+        // Let's also proactively clear recent notifications on wake to start fresh
+        UNUserNotificationCenter.current().removeAllDeliveredNotifications()
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        AppLifecycle.shared.isTerminating = true
         // Block the main thread entirely to ensure SwiftUI does not kill the app mid-unmount
         AppLifecycle.shared.mountManager?.unmountAllAndStopSync()
         return .terminateNow

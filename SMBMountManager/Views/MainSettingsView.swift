@@ -331,7 +331,7 @@ struct MountCard: View {
                                 FlowLayout(spacing: 4) {
                                     ForEach(mount.allowedSSIDs, id: \.self) { ssid in
                                         HStack(spacing: 3) {
-                                            Image(systemName: "wifi")
+                                            Image(systemName: ssid == "乙太網路" ? "network" : "wifi")
                                                 .font(.caption2)
                                             Text(ssid)
                                         }
@@ -618,6 +618,13 @@ struct ServicesTabView: View {
                 DispatchQueue.main.async { NSApp.activate(ignoringOtherApps: true) }
             }
         } message: { Text(alertMessage) }
+        .onChange(of: showAlert) { newValue in
+            if !newValue {
+                DispatchQueue.main.async {
+                    NSApp.mainWindow?.makeKeyAndOrderFront(nil)
+                }
+            }
+        }
     }
 
     private func serviceCard(icon: String, title: String, description: String, isInstalled: Bool, isRunning: Bool?) -> some View {
@@ -845,6 +852,7 @@ struct PreferencesTabView: View {
         Form {
             Section("一般") {
                 Toggle("開機時自動啟動", isOn: $settings.launchAtLogin)
+                Toggle("啟動時自動檢查更新", isOn: $settings.autoCheckUpdates)
                 Toggle("在選單列顯示連線數量", isOn: $settings.showMountCount)
             }
 
@@ -867,7 +875,8 @@ struct PreferencesTabView: View {
                 HStack {
                     Text("版本")
                     Spacer()
-                    Text("3.0.0")
+                    let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "未知"
+                    Text(version)
                         .foregroundStyle(.secondary)
                 }
                 HStack {
@@ -875,6 +884,14 @@ struct PreferencesTabView: View {
                     Spacer()
                     Text("林久翔")
                         .foregroundStyle(.secondary)
+                }
+                HStack {
+                    Spacer()
+                    Button("檢查更新...") {
+                        UpdateService.shared.checkForUpdates(manual: true)
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.blue)
                 }
                 HStack {
                     Spacer()
@@ -899,6 +916,7 @@ struct PreferencesTabView: View {
             alert.informativeText = "無法產生設定檔。"
             NSApp.activate(ignoringOtherApps: true)
             alert.runModal()
+            DispatchQueue.main.async { NSApp.mainWindow?.makeKeyAndOrderFront(nil) }
             return
         }
 
@@ -924,7 +942,10 @@ struct PreferencesTabView: View {
                 alert.informativeText = error.localizedDescription
                 NSApp.activate(ignoringOtherApps: true)
                 alert.runModal()
+                DispatchQueue.main.async { NSApp.mainWindow?.makeKeyAndOrderFront(nil) }
             }
+        } else {
+            DispatchQueue.main.async { NSApp.mainWindow?.makeKeyAndOrderFront(nil) }
         }
     }
 
@@ -949,6 +970,9 @@ struct PreferencesTabView: View {
             }
             NSApp.activate(ignoringOtherApps: true)
             alert.runModal()
+            DispatchQueue.main.async { NSApp.mainWindow?.makeKeyAndOrderFront(nil) }
+        } else {
+            DispatchQueue.main.async { NSApp.mainWindow?.makeKeyAndOrderFront(nil) }
         }
     }
 }
