@@ -1,5 +1,0 @@
----
-triple:          'arm64-apple-darwin'
-binary-path:     "/Users/imstevelin/本地儲存/SMBMountManager/build/Build/Products/Release/SMB掛載管理器.app/Contents/MacOS/SMB掛載管理器"
-relocations:     []
-...
