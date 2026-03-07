@@ -13,6 +13,7 @@
 		2A70A6A3DD0E4E72E4DD18F0 /* WiFiService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3002A4AF23CC569AF519D66 /* WiFiService.swift */; };
 		2B9144783A2F3CDEB44F020D /* SMBMountManagerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1CBD898351825B135B25D81 /* SMBMountManagerApp.swift */; };
 		3EA4567265ADA477D0EF4F9E /* StatusMenuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 551F7631DCF024BB47BE3AF4 /* StatusMenuView.swift */; };
+		47E7AB0A95B4A07413E192FC /* AMSMB2 in Embed Frameworks */ = {isa = PBXBuildFile; productRef = E22DA3AF09526A77CC7F1268 /* AMSMB2 */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		4AC26665C562DB01770246DD /* AMSMB2 in Frameworks */ = {isa = PBXBuildFile; productRef = E22DA3AF09526A77CC7F1268 /* AMSMB2 */; };
 		5049C66D8E97D7AB0D24C6B2 /* LaunchdService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CE2C22274E42F3D162681B3 /* LaunchdService.swift */; };
 		539FD64BC8E463D1CEC521FB /* DownloadTaskModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CCE1B567F604E6FDD287972 /* DownloadTaskModel.swift */; };
@@ -31,6 +32,20 @@
 		ECA60DDE60CB3868ED2A2146 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A795F624CFF44AB853281CFA /* AppSettings.swift */; };
 		F06345BF2FEB5DE95C4A96B0 /* NetworkMonitorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C15D4F5A096E60078BE7292 /* NetworkMonitorService.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		4A5CFA6AD9515AE0D7B0B4D0 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				47E7AB0A95B4A07413E192FC /* AMSMB2 in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		01A0C3DE84B1D8FD82683AEF /* MountDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MountDetailView.swift; sourceTree = "<group>"; };
@@ -95,6 +110,7 @@
 			children = (
 				D826A5CB048F68C7E580E1B3 /* SMBMountManager */,
 				11DED98CE19FCFBF648AE5D4 /* Products */,
+				F61BAC95F5B567AE3C315503 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -159,6 +175,13 @@
 			path = SMBMountManager;
 			sourceTree = "<group>";
 		};
+		F61BAC95F5B567AE3C315503 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -169,6 +192,7 @@
 				4FEE1E6D2F107D77AEC2E26B /* Sources */,
 				F9E4DD05A1F06B022B963E14 /* Resources */,
 				BFCBB106B054A7CFEA344090 /* Frameworks */,
+				4A5CFA6AD9515AE0D7B0B4D0 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -205,6 +229,7 @@
 				9E984240C1D720520D8301CA /* XCRemoteSwiftPackageReference "AMSMB2" */,
 			);
 			preferredProjectObjectVersion = 77;
+			productRefGroup = 11DED98CE19FCFBF648AE5D4 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
