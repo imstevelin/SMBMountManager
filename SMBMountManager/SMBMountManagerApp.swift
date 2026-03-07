@@ -65,29 +65,44 @@ struct MenuBarLabel: View {
     @ObservedObject var mountManager: MountManager
     @ObservedObject var settings: AppSettings
     @StateObject private var downloadManager = DownloadManager.shared
+    @StateObject private var uploadManager = UploadManager.shared
 
     var body: some View {
         HStack(spacing: 3) {
-            let activeTasks = downloadManager.tasks.filter { $0.state == .downloading || $0.state == .waiting || $0.state == .paused }
-            let isDownloading = downloadManager.tasks.contains { $0.state == .downloading }
-            let isPaused = !isDownloading && downloadManager.tasks.contains { $0.state == .paused }
-            let hasActiveTasks = !activeTasks.isEmpty
+            let activeDLTasks = downloadManager.tasks.filter { $0.state == .downloading || $0.state == .waiting || $0.state == .paused }
+            let activeULTasks = uploadManager.tasks.filter { $0.state == .uploading || $0.state == .waiting || $0.state == .paused }
             
-            if hasActiveTasks {
-                let totalBytes = activeTasks.reduce(0) { $0 + $1.totalBytes }
-                let downloadedBytes = activeTasks.reduce(0) { $0 + $1.downloadedBytes }
+            let isDownloading = downloadManager.tasks.contains { $0.state == .downloading }
+            let isUploading = uploadManager.tasks.contains { $0.state == .uploading }
+            
+            let isDlPaused = !isDownloading && activeDLTasks.contains { $0.state == .paused }
+            let isUlPaused = !isUploading && activeULTasks.contains { $0.state == .paused }
+            
+            let hasActiveTasks = !activeDLTasks.isEmpty || !activeULTasks.isEmpty
+            
+            if !activeDLTasks.isEmpty {
+                let totalBytes = activeDLTasks.reduce(0) { $0 + $1.totalBytes }
+                let downloadedBytes = activeDLTasks.reduce(0) { $0 + $1.downloadedBytes }
                 let progress = totalBytes > 0 ? (CGFloat(downloadedBytes) / CGFloat(totalBytes)) : 0.0
                 
-                Image(nsImage: .downloadProgressRing(progress: progress, isPaused: isPaused))
+                Image(nsImage: .downloadProgressRing(progress: progress, isPaused: isDlPaused))
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(height: 14)
+            }
+            
+            if !activeULTasks.isEmpty {
+                let totalBytes = activeULTasks.reduce(0) { $0 + $1.totalBytes }
+                let uploadedBytes = activeULTasks.reduce(0) { $0 + $1.uploadedBytes }
+                let progress = totalBytes > 0 ? (CGFloat(uploadedBytes) / CGFloat(totalBytes)) : 0.0
                 
-                if isDownloading {
-                    Text("\(Int(progress * 100))%")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                }
-            } else {
+                Image(nsImage: .downloadProgressRing(progress: progress, isPaused: isUlPaused))
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(height: 14)
+            }
+            
+            if !hasActiveTasks {
                 Image(systemName: mountManager.overallStatusIcon)
             }
             
@@ -213,6 +228,7 @@ struct MenuBarLabel: View {
                                 print("[Services] Started download for \(url.lastPathComponent) to \(destinationURL.path)")
                             }
                         }
+                        }
                     } else {
                         AppLogger.shared.warn("[Services] Path does not belong to any monitored SMB mount: \(path)")
                         let alert = NSAlert()
@@ -224,6 +240,76 @@ struct MenuBarLabel: View {
                         alert.runModal()
                     }
                 }
+            }
+        }
+        
+    @objc(handleUploadService:userData:error:)
+    func handleUploadService(_ pasteboard: NSPasteboard, userData: String, error: AutoreleasingUnsafeMutablePointer<NSString>) {
+        guard let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL], !urls.isEmpty else {
+            error.pointee = "找不到檔案路徑" as NSString
+            return
+        }
+        
+        Task { @MainActor in
+            let openPanel = NSOpenPanel()
+            openPanel.title = "選擇上傳目的地 (NAS 掛載點目錄)"
+            openPanel.canChooseDirectories = true
+            openPanel.canChooseFiles = false
+            openPanel.canCreateDirectories = true
+            openPanel.prompt = "上傳至此"
+            
+            if let volumesUrl = URL(string: "file:///Volumes") {
+                openPanel.directoryURL = volumesUrl
+            }
+            
+            NSApp.activate(ignoringOtherApps: true)
+            let modalResult = openPanel.runModal()
+            
+            if modalResult == .OK, let destinationURL = openPanel.url {
+                 guard let mountManager = AppLifecycle.shared.mountManager,
+                       let mount = mountManager.mounts.first(where: { destinationURL.path.hasPrefix($0.mountPath) }) else {
+                     let alert = NSAlert()
+                     alert.messageText = "無效的目的地"
+                     alert.informativeText = "您所選擇的目錄不屬於任何已知的 SMB 掛載點。"
+                     alert.alertStyle = .warning
+                     alert.addButton(withTitle: "確定")
+                     alert.runModal()
+                     return
+                 }
+                 
+                 var batchTasks: [(sourceURL: URL, mountId: String, relativeSMBPath: String)] = []
+                 
+                 for localURL in urls {
+                     var isDirectory: ObjCBool = false
+                     guard FileManager.default.fileExists(atPath: localURL.path, isDirectory: &isDirectory) else { continue }
+                     
+                     if isDirectory.boolValue {
+                         if let enumerator = FileManager.default.enumerator(at: localURL, includingPropertiesForKeys: [.isRegularFileKey]) {
+                             for case let fileURL as URL in enumerator {
+                                 do {
+                                     let resourceValues = try fileURL.resourceValues(forKeys: [.isRegularFileKey])
+                                     if resourceValues.isRegularFile == true {
+                                         let relativePathToFile = fileURL.path.replacingOccurrences(of: localURL.path + "/", with: "")
+                                         let targetFolderURL = destinationURL.appendingPathComponent(localURL.lastPathComponent)
+                                         let specificDestURL = targetFolderURL.appendingPathComponent(relativePathToFile)
+                                         
+                                         var relativeSMBPath = String(specificDestURL.path.dropFirst(mount.mountPath.count))
+                                         if relativeSMBPath.hasPrefix("/") { relativeSMBPath.removeFirst() }
+                                         
+                                         batchTasks.append((sourceURL: fileURL, mountId: mount.id, relativeSMBPath: relativeSMBPath))
+                                     }
+                                 } catch {}
+                             }
+                         }
+                     } else {
+                         let specificDestURL = destinationURL.appendingPathComponent(localURL.lastPathComponent)
+                         var relativeSMBPath = String(specificDestURL.path.dropFirst(mount.mountPath.count))
+                         if relativeSMBPath.hasPrefix("/") { relativeSMBPath.removeFirst() }
+                         batchTasks.append((sourceURL: localURL, mountId: mount.id, relativeSMBPath: relativeSMBPath))
+                     }
+                 }
+                 
+                 UploadManager.shared.addTasks(batch: batchTasks)
             }
         }
     }
@@ -254,6 +340,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // NEVER use DispatchQueue.main.sync here (it causes a libdispatch trap).
         Task { @MainActor in
             DownloadManager.shared.pauseAll()
+            UploadManager.shared.cancelAllAndShutdown()
         }
     }
     
@@ -266,6 +353,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         
         Task { @MainActor in
             DownloadManager.shared.startAll()
+            UploadManager.shared.resumeAll()
         }
     }
 

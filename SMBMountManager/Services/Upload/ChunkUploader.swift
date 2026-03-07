@@ -1,0 +1,188 @@
+import Foundation
+
+class ChunkUploader {
+    private var task: UploadTaskModel
+    private let onProgress: (UploadTaskModel) -> Void
+    private var isPaused = false
+    
+    // Chunk size: 4MB per chunk for optimal SMB transfer balance 
+    private let chunkSize: UInt64 = 4 * 1024 * 1024 
+    
+    private let taskLock = NSLock()
+    private var lastProgressUpdateTime: Date = Date()
+    
+    init(task: UploadTaskModel, onProgress: @escaping (UploadTaskModel) -> Void) {
+        self.task = task
+        self.onProgress = onProgress
+    }
+    
+    func pause() async {
+        isPaused = true
+    }
+    
+    func start() async {
+        guard !isPaused else { return }
+        
+        let localSourceURL = task.sourceURL
+        
+        // Find configuration and credentials
+        guard let mount = await MainActor.run(resultType: MountPoint?.self, body: {
+            AppLifecycle.shared.mountManager?.mounts.first(where: { $0.id == task.mountId })
+        }) else {
+            fail(with: "找不到對應的掛載點資訊")
+            return
+        }
+        
+        // Final destination path on the mounted volume
+        let destURL = URL(fileURLWithPath: mount.mountPath).appendingPathComponent(task.relativeSMBPath)
+        
+        // Temporary upload path to protect incomplete files
+        let uploadURL = destURL.appendingPathExtension("smbupload")
+        
+        do {
+            // Check local file access and size
+            if !FileManager.default.fileExists(atPath: localSourceURL.path) {
+                fail(with: "本機來源檔案不存在")
+                return
+            }
+            let localAttributes = try FileManager.default.attributesOfItem(atPath: localSourceURL.path)
+            guard let totalSize = localAttributes[.size] as? UInt64 else {
+                fail(with: "無法取得本機檔案大小")
+                return
+            }
+            
+            var remoteFileSize: UInt64 = 0
+            
+            // Check if temporary upload file exists for resuming
+            if FileManager.default.fileExists(atPath: uploadURL.path) {
+                let remoteAttributes = try FileManager.default.attributesOfItem(atPath: uploadURL.path)
+                remoteFileSize = remoteAttributes[.size] as? UInt64 ?? 0
+                
+                // Rollback 1MB (or up to 0) to prevent EOF packet drops leading to corrupted boundary
+                let rollbackAmount: UInt64 = 1 * 1024 * 1024
+                if remoteFileSize > rollbackAmount {
+                    remoteFileSize -= rollbackAmount
+                } else {
+                    remoteFileSize = 0
+                }
+            } else {
+                // If the target completely doesn't exist, create an empty file
+                let parentDir = uploadURL.deletingLastPathComponent()
+                if !FileManager.default.fileExists(atPath: parentDir.path) {
+                    try FileManager.default.createDirectory(at: parentDir, withIntermediateDirectories: true)
+                }
+                FileManager.default.createFile(atPath: uploadURL.path, contents: nil)
+            }
+            
+            // Validate local file modification date to prevent uploading changed files
+            let localModificationDate = localAttributes[.modificationDate] as? Date
+            if let savedDate = task.lastModificationDate, let currentDate = localModificationDate {
+                if abs(savedDate.timeIntervalSince(currentDate)) > 1.0 {
+                    // File modified! Start over for safety.
+                    remoteFileSize = 0
+                    try? FileManager.default.removeItem(at: uploadURL)
+                    FileManager.default.createFile(atPath: uploadURL.path, contents: nil)
+                }
+            }
+            
+            taskLock.lock()
+            task.totalBytes = totalSize
+            task.uploadedBytes = remoteFileSize
+            task.lastModificationDate = localModificationDate
+            task.state = .uploading
+            let updatedTask = task
+            taskLock.unlock()
+            
+            DispatchQueue.main.async { self.onProgress(updatedTask) }
+            
+            // Start transfer
+            try await performTransfer(localSourceURL: localSourceURL, uploadURL: uploadURL, finalDestURL: destURL, startOffset: remoteFileSize)
+            
+        } catch {
+            if !isPaused {
+                fail(with: "檔案初始化失敗：\(error.localizedDescription)")
+            }
+        }
+    }
+    
+    private func performTransfer(localSourceURL: URL, uploadURL: URL, finalDestURL: URL, startOffset: UInt64) async throws {
+        let readHandle = try FileHandle(forReadingFrom: localSourceURL)
+        defer { try? readHandle.close() }
+        
+        let writeHandle = try FileHandle(forUpdating: uploadURL)
+        defer { try? writeHandle.close() }
+        
+        var currentOffset = startOffset
+        let totalSize = task.totalBytes
+        
+        try readHandle.seek(toOffset: currentOffset)
+        try writeHandle.seek(toOffset: currentOffset)
+        
+        while currentOffset < totalSize && !isPaused {
+            let readSize = Int(min(chunkSize, totalSize - currentOffset))
+            
+            // Read from local
+            guard let data = try readHandle.read(upToCount: readSize), !data.isEmpty else { break }
+            
+            // Write to SMB mount
+            try writeHandle.write(contentsOf: data)
+            currentOffset += UInt64(data.count)
+            
+            let now = Date()
+            taskLock.lock()
+            self.task.uploadedBytes = currentOffset
+            
+            let shouldUpdate = now.timeIntervalSince(self.lastProgressUpdateTime) > 0.25 || currentOffset >= totalSize
+            if shouldUpdate {
+                self.lastProgressUpdateTime = now
+            }
+            let updatedTask = self.task
+            taskLock.unlock()
+            
+            if shouldUpdate {
+                DispatchQueue.main.async {
+                    self.onProgress(updatedTask)
+                }
+            }
+            
+            // Yield to allow task cancellation / pausing checks
+            await Task.yield()
+        }
+        
+        if isPaused { return }
+        
+        // If we reached here without pausing, complete the task
+        if currentOffset >= totalSize {
+            // Rename from .smbupload to final name
+            if FileManager.default.fileExists(atPath: finalDestURL.path) {
+                try? FileManager.default.removeItem(at: finalDestURL)
+            }
+            try FileManager.default.moveItem(at: uploadURL, to: finalDestURL)
+            
+            completeTask()
+        }
+    }
+    
+    private func fail(with message: String) {
+        taskLock.lock()
+        task.state = .error
+        task.errorMessage = message
+        let updatedTask = task
+        taskLock.unlock()
+        
+        DispatchQueue.main.async {
+            self.onProgress(updatedTask)
+        }
+    }
+    
+    private func completeTask() {
+        taskLock.lock()
+        task.state = .completed
+        let updatedTask = task
+        taskLock.unlock()
+        
+        DispatchQueue.main.async {
+            self.onProgress(updatedTask)
+        }
+    }
+}

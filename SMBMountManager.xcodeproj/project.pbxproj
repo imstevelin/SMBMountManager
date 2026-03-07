@@ -7,20 +7,25 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0F7F970E77F6653FA96BC85C /* TransferManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 467DB204A8C932E4FCBB282B /* TransferManagerView.swift */; };
+		14DDD5E03CC93CED970ED99E /* UploadManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 741B05407CDA8F143A501680 /* UploadManager.swift */; };
 		1524674B069F462F8ED4A727 /* MountEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2BE2E966357301663AF2E6 /* MountEngine.swift */; };
 		1864D93C8B48D3F61D7DBC07 /* MountManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C344C0B09CC2F559CD2E7917 /* MountManager.swift */; };
 		26F4AF1C225CFB74677D4244 /* UpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8487FF49C416CEFB6757182D /* UpdateService.swift */; };
 		2A70A6A3DD0E4E72E4DD18F0 /* WiFiService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3002A4AF23CC569AF519D66 /* WiFiService.swift */; };
 		2B9144783A2F3CDEB44F020D /* SMBMountManagerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1CBD898351825B135B25D81 /* SMBMountManagerApp.swift */; };
 		3EA4567265ADA477D0EF4F9E /* StatusMenuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 551F7631DCF024BB47BE3AF4 /* StatusMenuView.swift */; };
+		4F17B07C9D0FF55B703C99C9 /* UploadManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B0E17451A928E5ABFED4803 /* UploadManagerView.swift */; };
 		5049C66D8E97D7AB0D24C6B2 /* LaunchdService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CE2C22274E42F3D162681B3 /* LaunchdService.swift */; };
 		539FD64BC8E463D1CEC521FB /* DownloadTaskModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CCE1B567F604E6FDD287972 /* DownloadTaskModel.swift */; };
 		60C55D0B72C4AB9C1A6923B1 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 1E65F54BD839682D72223B19 /* AppIcon.icns */; };
 		6AF1FDE85975F4D23B7EE67D /* DownloadManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F522B9FA7F22EA650218DA8 /* DownloadManager.swift */; };
 		6FAE3BD455C993782569253C /* FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52B42D8C4FFCE43BFB732D60 /* FlowLayout.swift */; };
+		7C89FAF932A712856C6CA980 /* ChunkUploader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12E60CC529F45EE3D4866AB9 /* ChunkUploader.swift */; };
 		8DDF9D0F46316D69E5B89357 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EB9EF70AA8674397F41E19F /* KeychainService.swift */; };
 		AC1C5C1587BD789C6220A9FB /* ChunkDownloader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62757932EC63BF3C15A19681 /* ChunkDownloader.swift */; };
 		AE98C1A999ED772207494AA0 /* MountPoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4CA2B2BC2B556491880C7DF /* MountPoint.swift */; };
+		B1CEC5DE3BA61A146A43E30F /* UploadTaskModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 923DA3E4CEBF71A96FE55B01 /* UploadTaskModel.swift */; };
 		B5087423F235BBAB2B71B8AE /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78E710F648AA956EA391EFF0 /* NotificationService.swift */; };
 		B7CB8FFA445C91FC6EB4EF4A /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47AB499CA98C0056F31AD88B /* AppLogger.swift */; };
 		D679095C78C97DEE12465AA4 /* AddMountSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E51E1DDA12FC388C46B956C /* AddMountSheet.swift */; };
@@ -35,22 +40,27 @@
 /* Begin PBXFileReference section */
 		01A0C3DE84B1D8FD82683AEF /* MountDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MountDetailView.swift; sourceTree = "<group>"; };
 		0CCE1B567F604E6FDD287972 /* DownloadTaskModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadTaskModel.swift; sourceTree = "<group>"; };
+		12E60CC529F45EE3D4866AB9 /* ChunkUploader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChunkUploader.swift; sourceTree = "<group>"; };
 		1E65F54BD839682D72223B19 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
 		1F522B9FA7F22EA650218DA8 /* DownloadManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadManager.swift; sourceTree = "<group>"; };
 		2E51E1DDA12FC388C46B956C /* AddMountSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddMountSheet.swift; sourceTree = "<group>"; };
 		2F2BE2E966357301663AF2E6 /* MountEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MountEngine.swift; sourceTree = "<group>"; };
+		3B0E17451A928E5ABFED4803 /* UploadManagerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadManagerView.swift; sourceTree = "<group>"; };
 		3BDFF8FB7D5E686C6A2580FE /* ConnectionTestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionTestView.swift; sourceTree = "<group>"; };
+		467DB204A8C932E4FCBB282B /* TransferManagerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransferManagerView.swift; sourceTree = "<group>"; };
 		47AB499CA98C0056F31AD88B /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
 		52B42D8C4FFCE43BFB732D60 /* FlowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowLayout.swift; sourceTree = "<group>"; };
 		551F7631DCF024BB47BE3AF4 /* StatusMenuView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusMenuView.swift; sourceTree = "<group>"; };
 		5F53BFEF01C789D7840359BE /* SMBMountManager.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SMBMountManager.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		62757932EC63BF3C15A19681 /* ChunkDownloader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChunkDownloader.swift; sourceTree = "<group>"; };
 		69902506107BC8BCCFA6E9CA /* MainSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainSettingsView.swift; sourceTree = "<group>"; };
+		741B05407CDA8F143A501680 /* UploadManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadManager.swift; sourceTree = "<group>"; };
 		78E710F648AA956EA391EFF0 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		7C15D4F5A096E60078BE7292 /* NetworkMonitorService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitorService.swift; sourceTree = "<group>"; };
 		7CE2C22274E42F3D162681B3 /* LaunchdService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchdService.swift; sourceTree = "<group>"; };
 		7EB9EF70AA8674397F41E19F /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
 		8487FF49C416CEFB6757182D /* UpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateService.swift; sourceTree = "<group>"; };
+		923DA3E4CEBF71A96FE55B01 /* UploadTaskModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadTaskModel.swift; sourceTree = "<group>"; };
 		9E3693372BD6E13C0FF26E66 /* DownloadManagerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadManagerView.swift; sourceTree = "<group>"; };
 		A795F624CFF44AB853281CFA /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		B4CA2B2BC2B556491880C7DF /* MountPoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MountPoint.swift; sourceTree = "<group>"; };
@@ -98,6 +108,8 @@
 				69902506107BC8BCCFA6E9CA /* MainSettingsView.swift */,
 				01A0C3DE84B1D8FD82683AEF /* MountDetailView.swift */,
 				551F7631DCF024BB47BE3AF4 /* StatusMenuView.swift */,
+				467DB204A8C932E4FCBB282B /* TransferManagerView.swift */,
+				3B0E17451A928E5ABFED4803 /* UploadManagerView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -116,8 +128,19 @@
 				8487FF49C416CEFB6757182D /* UpdateService.swift */,
 				F3002A4AF23CC569AF519D66 /* WiFiService.swift */,
 				265020F7F67172BFE011AB02 /* Download */,
+				B9270AACA3D75F3CCFA38D8A /* Upload */,
 			);
 			path = Services;
+			sourceTree = "<group>";
+		};
+		B9270AACA3D75F3CCFA38D8A /* Upload */ = {
+			isa = PBXGroup;
+			children = (
+				12E60CC529F45EE3D4866AB9 /* ChunkUploader.swift */,
+				741B05407CDA8F143A501680 /* UploadManager.swift */,
+				923DA3E4CEBF71A96FE55B01 /* UploadTaskModel.swift */,
+			);
+			path = Upload;
 			sourceTree = "<group>";
 		};
 		C5784DAD345CF32B18A46E7F /* Models */ = {
@@ -219,6 +242,7 @@
 				B7CB8FFA445C91FC6EB4EF4A /* AppLogger.swift in Sources */,
 				ECA60DDE60CB3868ED2A2146 /* AppSettings.swift in Sources */,
 				AC1C5C1587BD789C6220A9FB /* ChunkDownloader.swift in Sources */,
+				7C89FAF932A712856C6CA980 /* ChunkUploader.swift in Sources */,
 				DC2E710C10A9D337E0902B57 /* ConnectionTestView.swift in Sources */,
 				6AF1FDE85975F4D23B7EE67D /* DownloadManager.swift in Sources */,
 				DEBE0DF463448635BC0C4B9F /* DownloadManagerView.swift in Sources */,
@@ -235,7 +259,11 @@
 				B5087423F235BBAB2B71B8AE /* NotificationService.swift in Sources */,
 				2B9144783A2F3CDEB44F020D /* SMBMountManagerApp.swift in Sources */,
 				3EA4567265ADA477D0EF4F9E /* StatusMenuView.swift in Sources */,
+				0F7F970E77F6653FA96BC85C /* TransferManagerView.swift in Sources */,
 				26F4AF1C225CFB74677D4244 /* UpdateService.swift in Sources */,
+				14DDD5E03CC93CED970ED99E /* UploadManager.swift in Sources */,
+				4F17B07C9D0FF55B703C99C9 /* UploadManagerView.swift in Sources */,
+				B1CEC5DE3BA61A146A43E30F /* UploadTaskModel.swift in Sources */,
 				2A70A6A3DD0E4E72E4DD18F0 /* WiFiService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

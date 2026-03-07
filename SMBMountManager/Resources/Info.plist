@@ -62,6 +62,34 @@
                 <string>FilePath</string>
             </dict>
         </dict>
+        <dict>
+            <key>NSMenuItem</key>
+            <dict>
+                <key>default</key>
+                <string>上傳至 SMB</string>
+            </dict>
+            <key>NSMessage</key>
+            <string>handleUploadService</string>
+            <key>NSPortName</key>
+            <string>SMB掛載管理器</string>
+            <key>NSSendFileTypes</key>
+            <array>
+                <string>public.item</string>
+                <string>public.folder</string>
+                <string>public.data</string>
+                <string>public.content</string>
+            </array>
+            <key>NSSendTypes</key>
+            <array>
+                <string>NSFilenamesPboardType</string>
+                <string>public.file-url</string>
+            </array>
+            <key>NSRequiredContext</key>
+            <dict>
+                <key>NSTextContent</key>
+                <string>FilePath</string>
+            </dict>
+        </dict>
     </array>
 </dict>
 </plist>

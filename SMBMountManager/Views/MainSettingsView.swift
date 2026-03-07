@@ -57,9 +57,9 @@ struct MainSettingsView: View {
                 .tabItem { Label("掛載點", systemImage: "externaldrive.connected.to.line.below") }
                 .tag(0)
 
-            // Tab 2: Downloads
-            DownloadManagerView()
-                .tabItem { Label("下載任務", systemImage: "arrow.down.circle") }
+            // Tab 2: Transfers
+            TransferManagerView()
+                .tabItem { Label("傳輸任務", systemImage: "arrow.up.arrow.down.circle") }
                 .tag(1)
 
             // Tab 3: System Services
