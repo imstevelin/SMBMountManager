@@ -875,20 +875,26 @@ class MountManager: ObservableObject {
 
     @discardableResult
     nonisolated func forceUnmount(_ path: String) -> Bool {
-        // Run synchronously but off the main thread; callers should not block on this
-        let task = Process()
-        task.launchPath = "/bin/bash"
-        task.arguments = ["-c", "/sbin/umount -f \"\(path)\" || diskutil unmount force \"\(path)\" 2>/dev/null"]
-        task.standardOutput = FileHandle.nullDevice
-        task.standardError = FileHandle.nullDevice
-        
-        do { 
-            try task.run()
-            task.waitUntilExit()
-            return task.terminationStatus == 0 
-        } catch { 
-            return false 
+        Task.detached {
+            let task = Process()
+            task.launchPath = "/bin/bash"
+            task.arguments = ["-c", "/sbin/umount -f \"\(path)\" || diskutil unmount force \"\(path)\" 2>/dev/null || rm -rf \"\(path)\" 2>/dev/null"]
+            task.standardOutput = FileHandle.nullDevice
+            task.standardError = FileHandle.nullDevice
+            
+            do { 
+                try task.run()
+                // Do not block indefinitely; give it 5 seconds to gracefully tear down the socket
+                let deadline = Date().addingTimeInterval(5)
+                while task.isRunning && Date() < deadline {
+                    try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s
+                }
+                if task.isRunning {
+                    task.terminate()
+                }
+            } catch { }
         }
+        return true
     }
 
     // MARK: - Log Reading

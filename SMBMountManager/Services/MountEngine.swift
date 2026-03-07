@@ -80,7 +80,15 @@ actor MountEngine {
                     let fm = FileManager.default
                     if fm.fileExists(atPath: targetPath) {
                         let contents = (try? fm.contentsOfDirectory(atPath: targetPath)) ?? []
-                        return !contents.isEmpty
+                        let filteredContents = contents.filter { $0 != ".DS_Store" }
+                        
+                        // If it only contained .DS_Store, it is not truly occupied.
+                        // We actively wipe the ghost folder to provide a clean slate for the mount command.
+                        if filteredContents.isEmpty && !contents.isEmpty {
+                            try? fm.removeItem(atPath: targetPath)
+                        }
+                        
+                        return !filteredContents.isEmpty
                     }
                     return false
                 }
@@ -95,14 +103,28 @@ actor MountEngine {
 
             if isOccupied {
                 log("[WARN] Mount path \(targetPath) is occupied by a stale session. Attempting OS cleanup...")
-                let _ = await Task.detached {
+                let _ = await Task.detached { [weak self] in
                     let task = Process()
                     task.launchPath = "/bin/bash"
                     task.arguments = ["-c", "/sbin/umount -f \"\(targetPath)\" || /usr/sbin/diskutil unmount force \"\(targetPath)\" 2>/dev/null"]
                     task.standardOutput = FileHandle.nullDevice
                     task.standardError = FileHandle.nullDevice
-                    try? task.run()
-                    task.waitUntilExit()
+                    
+                    do {
+                        try task.run()
+                        
+                        let deadline = Date().addingTimeInterval(15)
+                        while task.isRunning && Date() < deadline {
+                            Thread.sleep(forTimeInterval: 0.1)
+                        }
+                        
+                        if task.isRunning {
+                            self?.log("[ERROR] OS stale session cleanup timed out after 15 seconds. Terminating.")
+                            task.terminate()
+                        }
+                    } catch {
+                        self?.log("[ERROR] OS stale session cleanup failed: \(error.localizedDescription)")
+                    }
                 }.value
                 
                 _failCount += 1
@@ -135,6 +157,10 @@ actor MountEngine {
                     log("[SUCCESS] Mounted \(mount.name) on \(server)")
                     mounted = true
                     _failCount = 0
+                    
+                    await MainActor.run {
+                        DownloadManager.shared.resumeTasks(forMountId: mount.id)
+                    }
                     break
                 }
 
@@ -144,6 +170,10 @@ actor MountEngine {
                     log("[SUCCESS] Finder mount succeeded for \(mount.name) on \(server)")
                     mounted = true
                     _failCount = 0
+                    
+                    await MainActor.run {
+                        DownloadManager.shared.resumeTasks(forMountId: mount.id)
+                    }
                     break
                 }
             }
@@ -209,7 +239,19 @@ actor MountEngine {
 
         do {
             try task.run()
-            task.waitUntilExit()
+            
+            // Implement a 15-second timeout to prevent deadlocks during network reconnects
+            let deadline = Date().addingTimeInterval(15)
+            while task.isRunning && Date() < deadline {
+                Thread.sleep(forTimeInterval: 0.1)
+            }
+            
+            if task.isRunning {
+                log("[ERROR] mount_smbfs timed out after 15 seconds. Terminating.")
+                task.terminate()
+                if createdDir { try? fm.removeItem(atPath: mountPath) }
+                return false
+            }
         } catch {
             log("[ERROR] mount_smbfs launch failed: \(error.localizedDescription)")
             if createdDir { try? fm.removeItem(atPath: mountPath) }
@@ -243,7 +285,17 @@ actor MountEngine {
 
         do {
             try task.run()
-            task.waitUntilExit()
+            
+            let deadline = Date().addingTimeInterval(15)
+            while task.isRunning && Date() < deadline {
+                Thread.sleep(forTimeInterval: 0.1)
+            }
+            
+            if task.isRunning {
+                log("[ERROR] osascript (Finder mount) timed out after 15 seconds. Terminating.")
+                task.terminate()
+                return false
+            }
         } catch {
             return false
         }

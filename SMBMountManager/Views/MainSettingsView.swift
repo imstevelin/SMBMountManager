@@ -66,11 +66,16 @@ struct MainSettingsView: View {
             LogViewerTab(mountManager: mountManager)
                 .tabItem { Label("日誌", systemImage: "doc.text") }
                 .tag(2)
+                
+            // Tab 4: Downloads
+            DownloadManagerView()
+                .tabItem { Label("下載", systemImage: "arrow.down.circle") }
+                .tag(3)
 
-            // Tab 4: Preferences
+            // Tab 5: Preferences
             PreferencesTabView(mountManager: mountManager)
                 .tabItem { Label("偏好設定", systemImage: "slider.horizontal.3") }
-                .tag(3)
+                .tag(4)
         }
         .frame(minWidth: 760, minHeight: 540)
         .sheet(isPresented: $showAddSheet) {

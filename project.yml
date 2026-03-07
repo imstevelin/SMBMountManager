@@ -11,12 +11,19 @@ settings:
     SWIFT_VERSION: "5.9"
     MACOSX_DEPLOYMENT_TARGET: "26.0"
 
+packages:
+  AMSMB2:
+    url: https://github.com/amosavian/AMSMB2.git
+    from: 3.0.0
+
 targets:
   SMBMountManager:
     type: application
     platform: macOS
     sources:
       - path: SMBMountManager
+    dependencies:
+      - package: AMSMB2
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.imstevelin.SMBMountManager
