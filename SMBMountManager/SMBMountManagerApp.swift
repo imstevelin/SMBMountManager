@@ -91,7 +91,7 @@ struct MenuBarLabel: View {
                 Image(systemName: mountManager.overallStatusIcon)
             }
             
-            if settings.showMountCount && !mountManager.mounts.isEmpty && !isDownloading {
+            if settings.showMountCount && !mountManager.mounts.isEmpty && !hasActiveTasks {
                 let connected = mountManager.statuses.values.filter { $0.isMounted && $0.isResponsive }.count
                 let total = mountManager.mounts.count
                 Text("\(connected)/\(total)")
@@ -104,7 +104,8 @@ struct MenuBarLabel: View {
 // MARK: - App Delegate for notifications + termination
 
 @objc class MacServicesProvider: NSObject {
-    @objc func handleDownloadService(_ pasteboard: NSPasteboard, userData: String?, error: AutoreleasingUnsafeMutablePointer<NSString>) {
+    @objc(handleDownloadService:userData:error:)
+    func handleDownloadService(_ pasteboard: NSPasteboard, userData: String, error: AutoreleasingUnsafeMutablePointer<NSString>) {
         guard let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL], !urls.isEmpty else {
             error.pointee = "找不到檔案路徑" as NSString
             return

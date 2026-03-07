@@ -38,7 +38,7 @@
             <key>NSMenuItem</key>
             <dict>
                 <key>default</key>
-                <string>多線程加速下載 (SMB)</string>
+                <string>SMB 專用下載</string>
             </dict>
             <key>NSMessage</key>
             <string>handleDownloadService</string>

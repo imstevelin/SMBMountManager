@@ -18,6 +18,9 @@ class DownloadManager: ObservableObject {
     @Published var currentSpeedBytesPerSecond: Int64 = 0
     private var lastTotalBytesDownloaded: Int64 = 0
     private var speedTimer: Timer?
+    private var recentSpeeds: [Int64] = []
+    private let maxRecentSpeeds = 3
+    private var lastCalculatedSpeed: Int64 = 0
     
     private init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -36,17 +39,25 @@ class DownloadManager: ObservableObject {
                 guard let self = self else { return }
                 let currentTotal = self.tasks.reduce(UInt64(0)) { $0 + $1.downloadedBytes }
                 
-                // If there was a jump or reset (like starting a new task), prevent negative spikes
+                var instantaneousSpeed: Int64 = 0
                 if currentTotal >= UInt64(max(0, self.lastTotalBytesDownloaded)) {
                     let diff = currentTotal - UInt64(max(0, self.lastTotalBytesDownloaded))
-                    self.currentSpeedBytesPerSecond = Int64(diff)
-                } else {
-                    self.currentSpeedBytesPerSecond = 0
+                    instantaneousSpeed = Int64(diff)
                 }
                 self.lastTotalBytesDownloaded = Int64(currentTotal)
                 
-                // Reset speed to 0 if no active tasks
-                if self.tasks.filter({ $0.state == .downloading }).isEmpty {
+                let isDownloading = !self.tasks.filter { $0.state == .downloading }.isEmpty
+                
+                if isDownloading {
+                    self.recentSpeeds.append(instantaneousSpeed)
+                    if self.recentSpeeds.count > self.maxRecentSpeeds {
+                        self.recentSpeeds.removeFirst()
+                    }
+                    let avgSpeed = self.recentSpeeds.reduce(0, +) / Int64(self.recentSpeeds.count)
+                    self.lastCalculatedSpeed = avgSpeed
+                    self.currentSpeedBytesPerSecond = self.lastCalculatedSpeed
+                } else {
+                    self.recentSpeeds.removeAll()
                     self.currentSpeedBytesPerSecond = 0
                 }
             }
@@ -201,8 +212,32 @@ class DownloadManager: ObservableObject {
     
     func deleteAllActive() {
         let activeTasks = tasks.filter { $0.state != .completed }
-        for task in activeTasks {
-            cancelTask(id: task.id)
+        guard !activeTasks.isEmpty else { return }
+        
+        Task {
+            // Pause all active downloads concurrently
+            await withTaskGroup(of: Void.self) { group in
+                for task in activeTasks {
+                    if let downloader = downloaders[task.id] {
+                        group.addTask {
+                            await downloader.pause()
+                        }
+                    }
+                }
+            }
+            
+            // Perform batch update on the main thread
+            DispatchQueue.main.async {
+                for task in activeTasks {
+                    let dest = task.destinationURL
+                    try? FileManager.default.removeItem(at: dest)
+                    self.downloaders.removeValue(forKey: task.id)
+                }
+                
+                self.tasks.removeAll { $0.state != .completed }
+                self.saveTasks()
+                self.processQueue()
+            }
         }
     }
     

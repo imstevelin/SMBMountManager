@@ -79,7 +79,8 @@ struct ConnectionTestView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(12)
                         }
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+                        .glassEffect(.regular, in: .rect(cornerRadius: 10))
                     }
                     .frame(maxHeight: .infinity)
                 } else {

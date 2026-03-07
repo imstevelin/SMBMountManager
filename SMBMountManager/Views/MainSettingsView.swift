@@ -165,10 +165,11 @@ struct MountsTabView: View {
                     .tint(.red)
                 }
                 .padding(14)
-                .background(Color.red.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                .glassEffect(.regular, in: .rect(cornerRadius: 12))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(Color.red.opacity(0.3), lineWidth: 1)
+                        .strokeBorder(Color.red.opacity(0.35), lineWidth: 1)
                 )
                 .padding(.horizontal, 24)
                 .padding(.bottom, 12)
@@ -460,16 +461,13 @@ struct MountCard: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 14))
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .glassEffect(.regular, in: .rect(cornerRadius: 14))
         .overlay(
             RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
+                .strokeBorder(statusColor.opacity(0.4), lineWidth: 1)
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(statusColor.opacity(0.3), lineWidth: 1)
-        )
-        .shadow(color: .primary.opacity(0.08), radius: 4, y: 2)
+        .shadow(color: statusColor.opacity(0.08), radius: 4, y: 2)
         .alert(alertTitle, isPresented: $showAlert) {
             Button("確定") {
                 DispatchQueue.main.async { NSApp.activate(ignoringOtherApps: true) }
@@ -551,10 +549,11 @@ struct ServicesTabView: View {
                     Spacer()
                 }
                 .padding(14)
-                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 14))
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+                .glassEffect(.regular, in: .rect(cornerRadius: 14))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
+                        .strokeBorder(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 1)
                 )
                 .shadow(color: .primary.opacity(0.06), radius: 3, y: 1)
                 .padding(.horizontal, 24)
@@ -585,10 +584,11 @@ struct ServicesTabView: View {
                     Spacer()
                 }
                 .padding(14)
-                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 14))
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+                .glassEffect(.regular, in: .rect(cornerRadius: 14))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
+                        .strokeBorder(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 1)
                 )
                 .shadow(color: .primary.opacity(0.06), radius: 3, y: 1)
                 .padding(.horizontal, 24)
@@ -685,10 +685,11 @@ struct ServicesTabView: View {
             }
             .padding(14)
         }
-        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 14))
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .glassEffect(.regular, in: .rect(cornerRadius: 14))
         .overlay(
             RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
+                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 1)
         )
         .shadow(color: .primary.opacity(0.06), radius: 3, y: 1)
         .padding(.horizontal, 24)
@@ -705,7 +706,8 @@ struct ServicesTabView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 4)
-        .background(color.opacity(0.08), in: Capsule())
+        .background(.ultraThinMaterial, in: Capsule())
+        .glassEffect(.regular, in: .capsule)
     }
 }
 
