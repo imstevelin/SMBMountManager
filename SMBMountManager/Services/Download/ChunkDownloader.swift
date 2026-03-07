@@ -1,5 +1,4 @@
 import Foundation
-import AMSMB2
 
 class ChunkDownloader {
     private var task: DownloadTaskModel
@@ -24,7 +23,7 @@ class ChunkDownloader {
     func start() async {
         guard !isPaused else { return }
         
-        // Find credentials
+        // Find configuration and credentials
         guard let mount = await MainActor.run(resultType: MountPoint?.self, body: {
             AppLifecycle.shared.mountManager?.mounts.first(where: { $0.id == task.mountId })
         }) else {
@@ -32,30 +31,20 @@ class ChunkDownloader {
             return
         }
         
-        let password = KeychainService.getPassword(forMount: mount.name, username: mount.username) ?? ""
-        var serverString = mount.servers.first ?? ""
-        if !serverString.starts(with: "smb://") {
-            serverString = "smb://" + serverString
-        }
-        guard let serverURL = URL(string: serverString) else {
-            fail(with: "無效的伺服器位址")
-            return
-        }
+        // Use local mount path since it's already mounted by the OS
+        let sourceURL = URL(fileURLWithPath: mount.mountPath).appendingPathComponent(task.relativeSMBPath)
         
-        let credential = URLCredential(user: mount.username, password: password, persistence: .none)
-        
-        // 1. If totalBytes is 0, we need to fetch file info to know the size
         if task.totalBytes == 0 {
             do {
-                guard let initialClient = SMB2Manager(url: serverURL, credential: credential) else {
-                    fail(with: "無法初始化連線客戶端")
+                if !FileManager.default.fileExists(atPath: sourceURL.path) {
+                    fail(with: "來源檔案不存在或尚未連線")
                     return
                 }
-                try await initialClient.connectShare(name: mount.shareName)
                 
-                let stats = try await initialClient.attributesOfItem(atPath: task.relativeSMBPath)
-                guard let size = stats[.fileSizeKey] as? UInt64 else {
-                    throw NSError(domain: "AMSMB2", code: -2, userInfo: [NSLocalizedDescriptionKey: "無法取得檔案大小"])
+                let attributes = try FileManager.default.attributesOfItem(atPath: sourceURL.path)
+                guard let size = attributes[.size] as? UInt64 else {
+                    fail(with: "無法取得檔案大小")
+                    return
                 }
                 
                 // Update total size
@@ -101,11 +90,10 @@ class ChunkDownloader {
             onProgress(updatedTask)
         }
         
-        // 2. Start concurrent download of pending chunks
-        await downloadPendingChunks(serverURL: serverURL, credential: credential, shareName: mount.shareName)
+        await downloadPendingChunks(sourceURL: sourceURL)
     }
     
-    private func downloadPendingChunks(serverURL: URL, credential: URLCredential, shareName: String) async {
+    private func downloadPendingChunks(sourceURL: URL) async {
         let pendingChunkIndices = task.chunks.indices.filter { !task.chunks[$0].isCompleted }
         
         if pendingChunkIndices.isEmpty {
@@ -114,8 +102,8 @@ class ChunkDownloader {
         }
         
         do {
-            let handle = try FileHandle(forUpdating: task.destinationURL)
-            defer { try? handle.close() }
+            let writeHandle = try FileHandle(forUpdating: task.destinationURL)
+            defer { try? writeHandle.close() }
             
             try await withThrowingTaskGroup(of: Void.self) { group in
                 var concurrentCount = 0
@@ -123,7 +111,6 @@ class ChunkDownloader {
                 for index in pendingChunkIndices {
                     if isPaused { break }
                     
-                    // Throttle
                     if concurrentCount >= maxConcurrentConnections {
                         try await group.next()
                         concurrentCount -= 1
@@ -133,13 +120,12 @@ class ChunkDownloader {
                     
                     concurrentCount += 1
                     group.addTask {
-                        try await self.downloadChunk(at: index, serverURL: serverURL, credential: credential, shareName: shareName, writeHandle: handle)
+                        try await self.downloadChunk(at: index, sourceURL: sourceURL, writeHandle: writeHandle)
                     }
                 }
                 
-                // Wait for remaining
                 while try await group.next() != nil {
-                    // Do nothing wait to finish
+                    // completion
                 }
             }
             
@@ -153,17 +139,13 @@ class ChunkDownloader {
         }
     }
     
-    private func downloadChunk(at index: Int, serverURL: URL, credential: URLCredential, shareName: String, writeHandle: FileHandle) async throws {
+    private func downloadChunk(at index: Int, sourceURL: URL, writeHandle: FileHandle) async throws {
         let chunk = task.chunks[index]
         if chunk.isCompleted { return }
         
-        // 1. Create a dedicated client for this chunk thread
-        guard let client = SMB2Manager(url: serverURL, credential: credential) else {
-            throw NSError(domain: "AMSMB2", code: -3, userInfo: [NSLocalizedDescriptionKey: "初始化連線失敗"])
-        }
-        try await client.connectShare(name: shareName)
+        let readHandle = try FileHandle(forReadingFrom: sourceURL)
+        defer { try? readHandle.close() }
         
-        // 2. Read loop
         var currentOffset = chunk.startOffset + chunk.downloadedBytes
         let endOffset = chunk.startOffset + chunk.expectedSize
         let bufferSize: UInt64 = 1024 * 1024 // 1MB buffer
@@ -171,14 +153,9 @@ class ChunkDownloader {
         while currentOffset < endOffset && !isPaused {
             let readSize = Int(min(bufferSize, endOffset - currentOffset))
             
-            // Read from SMB server directly at offset
-            guard let data = try? await client.contents(atPath: task.relativeSMBPath, range: currentOffset..<(currentOffset + UInt64(readSize))) else {
-                throw NSError(domain: "AMSMB2", code: -4, userInfo: [NSLocalizedDescriptionKey: "讀取伺服器資料失敗"])
-            }
+            try readHandle.seek(toOffset: currentOffset)
+            guard let data = try readHandle.read(upToCount: readSize), !data.isEmpty else { break }
             
-            if data.isEmpty { break }
-            
-            // Thread-safe write to local file
             fileLock.lock()
             try writeHandle.seek(toOffset: currentOffset)
             try writeHandle.write(contentsOf: data)
@@ -187,7 +164,6 @@ class ChunkDownloader {
             currentOffset += UInt64(data.count)
             let downloaded = currentOffset - chunk.startOffset
             
-            // Thread-safe update task progress and Throttle UI
             let now = Date()
             taskLock.lock()
             self.task.chunks[index].downloadedBytes = downloaded
@@ -204,8 +180,6 @@ class ChunkDownloader {
                 }
             }
         }
-        
-        try await client.disconnectShare()
     }
     
     private func fail(with message: String) {

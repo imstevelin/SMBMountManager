@@ -14,6 +14,11 @@ class DownloadManager: ObservableObject {
     private let maxConcurrentTasks = 5
     private var downloaders: [UUID: ChunkDownloader] = [:]
     
+    // Download speed tracking
+    @Published var currentSpeedBytesPerSecond: Int64 = 0
+    private var lastTotalBytesDownloaded: Int64 = 0
+    private var speedTimer: Timer?
+    
     private init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let managerDir = appSupport.appendingPathComponent("SMBMountManager/Downloads")
@@ -21,11 +26,37 @@ class DownloadManager: ObservableObject {
         self.storageURL = managerDir.appendingPathComponent("tasks.json")
         
         loadTasks()
+        startSpeedMeasurement()
+    }
+    
+    private func startSpeedMeasurement() {
+        speedTimer?.invalidate()
+        speedTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self = self else { return }
+                let currentTotal = self.tasks.reduce(UInt64(0)) { $0 + $1.downloadedBytes }
+                
+                // If there was a jump or reset (like starting a new task), prevent negative spikes
+                if currentTotal >= UInt64(max(0, self.lastTotalBytesDownloaded)) {
+                    let diff = currentTotal - UInt64(max(0, self.lastTotalBytesDownloaded))
+                    self.currentSpeedBytesPerSecond = Int64(diff)
+                } else {
+                    self.currentSpeedBytesPerSecond = 0
+                }
+                self.lastTotalBytesDownloaded = Int64(currentTotal)
+                
+                // Reset speed to 0 if no active tasks
+                if self.tasks.filter({ $0.state == .downloading }).isEmpty {
+                    self.currentSpeedBytesPerSecond = 0
+                }
+            }
+        }
     }
     
     private func loadTasks() {
         guard let data = try? Data(contentsOf: storageURL),
               let savedTasks = try? JSONDecoder().decode([DownloadTaskModel].self, from: data) else {
+            AppLogger.shared.info("[DownloadManager] No saved tasks found or failed to decode.")
             return
         }
         self.tasks = savedTasks
@@ -57,6 +88,7 @@ class DownloadManager: ObservableObject {
                 destinationURL: item.destinationURL
             )
             newTasks.append(task)
+            AppLogger.shared.info("[DownloadManager] Queued download for file: \(item.fileName)")
         }
         tasks.append(contentsOf: newTasks)
         saveTasks()
@@ -91,6 +123,7 @@ class DownloadManager: ObservableObject {
     private func _startTask(id: UUID) {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
         tasks[index].state = .downloading
+        AppLogger.shared.info("[DownloadManager] Started downloading: \(tasks[index].fileName)")
         
         let taskModel = tasks[index]
         let downloader = ChunkDownloader(task: taskModel) { [weak self] updatedTask in
@@ -108,6 +141,7 @@ class DownloadManager: ObservableObject {
     func pauseTask(id: UUID) {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
         tasks[index].state = .paused
+        AppLogger.shared.info("[DownloadManager] Paused task: \(tasks[index].fileName)")
         saveTasks()
         
         Task {
@@ -120,15 +154,17 @@ class DownloadManager: ObservableObject {
     }
     
     func cancelTask(id: UUID) {
-        guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
-        
         Task {
             await downloaders[id]?.pause()
             
             DispatchQueue.main.async {
-                // Remove partial file
-                let dest = self.tasks[index].destinationURL
-                try? FileManager.default.removeItem(at: dest)
+                guard let index = self.tasks.firstIndex(where: { $0.id == id }) else { return }
+                
+                // Only remove partial file if it's not completed
+                if self.tasks[index].state != .completed {
+                    let dest = self.tasks[index].destinationURL
+                    try? FileManager.default.removeItem(at: dest)
+                }
                 
                 self.tasks.remove(at: index)
                 self.downloaders.removeValue(forKey: id)
@@ -163,24 +199,16 @@ class DownloadManager: ObservableObject {
         saveTasks()
     }
     
-    func deleteAll() {
-        // Snapshot to avoid index-out-of-bounds crashes during async deletion
-        let tasksSnapshot = tasks
-        tasks.removeAll()
-        saveTasks()
-        
-        for task in tasksSnapshot {
-            let id = task.id
-            let dest = task.destinationURL
-            Task {
-                await downloaders[id]?.pause()
-                
-                DispatchQueue.main.async {
-                    try? FileManager.default.removeItem(at: dest)
-                    self.downloaders.removeValue(forKey: id)
-                }
-            }
+    func deleteAllActive() {
+        let activeTasks = tasks.filter { $0.state != .completed }
+        for task in activeTasks {
+            cancelTask(id: task.id)
         }
+    }
+    
+    func clearAllCompleted() {
+        tasks.removeAll { $0.state == .completed }
+        saveTasks()
     }
     
     func resumeTasks(forMountId mountId: String) {
@@ -222,6 +250,14 @@ class DownloadManager: ObservableObject {
         tasks[index] = updatedTask
         
         let finalState = tasks[index].state
+        if finalState != currentState {
+            if finalState == .completed {
+                AppLogger.shared.info("[DownloadManager] Completed task: \(tasks[index].fileName)")
+            } else if finalState == .error {
+                AppLogger.shared.error("[DownloadManager] Task failed: \(tasks[index].fileName)")
+            }
+        }
+        
         if finalState == .completed || finalState == .error || finalState == .paused {
             saveTasks() // Ensure final state is saved
             if finalState == .completed || finalState == .error {

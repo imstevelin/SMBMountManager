@@ -57,24 +57,24 @@ struct MainSettingsView: View {
                 .tabItem { Label("掛載點", systemImage: "externaldrive.connected.to.line.below") }
                 .tag(0)
 
-            // Tab 2: System Services
-            ServicesTabView(mountManager: mountManager, networkMonitor: networkMonitor)
-                .tabItem { Label("系統服務", systemImage: "gearshape.2") }
+            // Tab 2: Downloads
+            DownloadManagerView()
+                .tabItem { Label("下載任務", systemImage: "arrow.down.circle") }
                 .tag(1)
 
-            // Tab 3: Log Viewer
+            // Tab 3: System Services
+            ServicesTabView(mountManager: mountManager, networkMonitor: networkMonitor)
+                .tabItem { Label("服務", systemImage: "gearshape.2") }
+                .tag(2)
+
+            // Tab 4: Log Viewer
             LogViewerTab(mountManager: mountManager)
                 .tabItem { Label("日誌", systemImage: "doc.text") }
-                .tag(2)
-                
-            // Tab 4: Downloads
-            DownloadManagerView()
-                .tabItem { Label("下載", systemImage: "arrow.down.circle") }
                 .tag(3)
 
             // Tab 5: Preferences
             PreferencesTabView(mountManager: mountManager)
-                .tabItem { Label("偏好設定", systemImage: "slider.horizontal.3") }
+                .tabItem { Label("設定", systemImage: "slider.horizontal.3") }
                 .tag(4)
         }
         .frame(minWidth: 760, minHeight: 540)
@@ -111,6 +111,9 @@ struct MainSettingsView: View {
         .onAppear {
             mountManager.refresh()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenDownloadsTab"))) { _ in
+            selectedTab = 1
+        }
     }
 }
 
@@ -146,6 +149,30 @@ struct MountsTabView: View {
             .padding(.horizontal, 24)
             .padding(.top, 20)
             .padding(.bottom, 12)
+            
+            if !mountManager.systemService.fixerInstalled {
+                HStack(spacing: 12) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                    Text("使用前請先安裝「權限修復服務」，以確保掛載功能正常運作。")
+                        .font(.callout)
+                    Spacer()
+                    Button("安裝服務") {
+                        let _ = LaunchdService.installFixer()
+                        mountManager.refresh()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                }
+                .padding(14)
+                .background(Color.red.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .strokeBorder(Color.red.opacity(0.3), lineWidth: 1)
+                )
+                .padding(.horizontal, 24)
+                .padding(.bottom, 12)
+            }
 
             if mountManager.mounts.isEmpty {
                 emptyState
@@ -481,6 +508,7 @@ struct ServicesTabView: View {
     @State private var showAlert = false
     @State private var alertTitle = ""
     @State private var alertMessage = ""
+    @State private var showRemoveConfirm = false
 
     var body: some View {
         ScrollView {
@@ -490,7 +518,7 @@ struct ServicesTabView: View {
                     Image(systemName: "gearshape.2")
                         .font(.title2)
                         .foregroundStyle(.tint)
-                    Text("系統服務")
+                    Text("服務")
                         .font(.title2.bold())
                 }
                 .padding(.horizontal, 24)
@@ -585,29 +613,8 @@ struct ServicesTabView: View {
 
                 // Action buttons
                 HStack(spacing: 12) {
-                    Button {
-                        let ok = LaunchdService.installFixer()
-                        mountManager.refresh()
-                        alertTitle = ok ? "操作成功" : "操作失敗"
-                        alertMessage = ok ? "權限修復服務已安裝！" : "安裝失敗，您可能取消了授權。"
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            NSApp.activate(ignoringOtherApps: true)
-                            showAlert = true
-                        }
-                    } label: {
-                        Label("安裝權限修復服務", systemImage: "arrow.down.circle")
-                    }
-                    .buttonStyle(.borderedProminent)
-
                     Button(role: .destructive) {
-                        let ok = LaunchdService.removeFixer()
-                        mountManager.refresh()
-                        alertTitle = ok ? "操作成功" : "操作失敗"
-                        alertMessage = ok ? "權限修復服務已移除。" : "移除失敗，您可能取消了授權。"
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            NSApp.activate(ignoringOtherApps: true)
-                            showAlert = true
-                        }
+                        showRemoveConfirm = true
                     } label: {
                         Label("移除權限修復服務", systemImage: "trash")
                     }
@@ -617,6 +624,21 @@ struct ServicesTabView: View {
                 .padding(.horizontal, 24)
             }
             .padding(.bottom, 24)
+        }
+        .confirmationDialog("危險操作", isPresented: $showRemoveConfirm) {
+            Button("確定移除", role: .destructive) {
+                let ok = LaunchdService.removeFixer()
+                mountManager.refresh()
+                alertTitle = ok ? "操作成功" : "操作失敗"
+                alertMessage = ok ? "權限修復服務已移除。" : "移除失敗，您可能取消了授權。"
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    NSApp.activate(ignoringOtherApps: true)
+                    showAlert = true
+                }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("您確定要移除系統權限修復服務嗎？這可能會導致未來掛載點發生權限異常錯誤。")
         }
         .alert(alertTitle, isPresented: $showAlert) {
             Button("確定") {
@@ -691,34 +713,18 @@ struct ServicesTabView: View {
 
 struct LogViewerTab: View {
     @ObservedObject var mountManager: MountManager
-    @State private var selectedLog = ""
     @State private var logContent = ""
     @State private var searchText = ""
     @State private var autoScroll = true
     @State private var hasInitialized = false
 
-    private var logChoices: [(id: String, label: String)] {
-        var choices: [(String, String)] = []
-        for mount in mountManager.mounts {
-            choices.append((mount.name, "📁 \(mount.name)"))
-        }
-        if choices.isEmpty {
-            choices.append(("none", "無"))
-        }
-        return choices
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             // Toolbar
             HStack(spacing: 12) {
-                Picker("日誌來源", selection: $selectedLog) {
-                    ForEach(logChoices, id: \.id) { choice in
-                        Text(choice.label).tag(choice.id)
-                    }
-                }
-                .frame(width: 200)
-                .onChange(of: selectedLog) { _ in refreshLog() }
+                Text("應用程式全域日誌")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
 
                 Spacer()
 
@@ -747,7 +753,7 @@ struct LogViewerTab: View {
                 .buttonStyle(.borderless)
 
                 Button {
-                    let path = selectedLog == "monitor" ? "\(NSHomeDirectory())/Library/Logs/mount_monitor.log" : "\(NSHomeDirectory())/Library/Logs/mount_\(selectedLog).log"
+                    let path = AppLogger.shared.logPath
                     NSWorkspace.shared.open(URL(fileURLWithPath: path))
                 } label: {
                     Image(systemName: "arrow.up.forward.square")
@@ -787,10 +793,6 @@ struct LogViewerTab: View {
         .onAppear {
             if !hasInitialized {
                 hasInitialized = true
-                // Auto-select first mount instead of old "monitor"
-                if let first = logChoices.first {
-                    selectedLog = first.id
-                }
             }
             refreshLog()
         }
@@ -803,11 +805,7 @@ struct LogViewerTab: View {
     }
 
     private func refreshLog() {
-        if selectedLog == "none" {
-            logContent = "無"
-        } else {
-            logContent = mountManager.readLog(for: selectedLog, lines: 200)
-        }
+        logContent = AppLogger.shared.readLogs()
     }
 }
 

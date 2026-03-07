@@ -41,7 +41,7 @@ class UpdateService {
         
         let task = URLSession.shared.dataTask(with: url) { data, response, error in
             if let error = error {
-                print("[UpdateService] Update check failed: \(error.localizedDescription)")
+                AppLogger.shared.error("[UpdateService] Update check failed: \(error.localizedDescription)")
                 if manual { self.showErrorAlert(message: "網路錯誤，無法檢查更新。") }
                 return
             }
@@ -64,7 +64,7 @@ class UpdateService {
                     }
                 }
             } catch {
-                print("[UpdateService] Failed to parse GitHub API response: \(error)")
+                AppLogger.shared.error("[UpdateService] Failed to parse GitHub API response: \(error)")
                 if manual { self.showErrorAlert(message: "無法解析更新資料。") }
             }
         }
@@ -90,13 +90,10 @@ class UpdateService {
         
         isUpdating = true
         
-        let alert = NSAlert()
-        alert.messageText = "正在下載更新..."
-        alert.informativeText = "請稍候，下載並安裝完成後程式將自動重新啟動。"
-        alert.addButton(withTitle: "在背景執行")
-        NSApp.activate(ignoringOtherApps: true)
-        _ = alert.runModal()
-        // We don't really care what they click, it downloads in the background anyway
+        isUpdating = true
+        
+        // Removed the modal alert blocking the update process
+        // to achieve silent downloading in the background.
         
         let session = URLSession(configuration: .default)
         let downloadTask = session.downloadTask(with: downloadURL) { [weak self] tempURL, response, error in
@@ -105,7 +102,7 @@ class UpdateService {
             defer { self.isUpdating = false }
             
             if let error = error {
-                print("[UpdateService] Download failed: \(error.localizedDescription)")
+                AppLogger.shared.error("[UpdateService] Download failed: \(error.localizedDescription)")
                 DispatchQueue.main.async { self.showErrorAlert(message: "下載更新檔失敗。") }
                 return
             }
@@ -190,7 +187,7 @@ class UpdateService {
             }
             
         } catch {
-            print("[UpdateService] Install failed: \(error.localizedDescription)")
+            AppLogger.shared.error("[UpdateService] Install failed: \(error.localizedDescription)")
             DispatchQueue.main.async { self.showErrorAlert(message: "安裝更新失敗：\(error.localizedDescription)") }
         }
     }
@@ -202,7 +199,8 @@ class UpdateService {
         
         let alert = NSAlert()
         alert.messageText = "有新版本可用！"
-        alert.informativeText = "最新版本: \(release.tagName)\\n\\n更新內容：\\n\(release.body.prefix(300))..."
+        let formattedBody = release.body.replacingOccurrences(of: "\\n", with: "\n")
+        alert.informativeText = "最新版本: \(release.tagName)\n\n更新內容：\n\(formattedBody.prefix(300))..."
         alert.addButton(withTitle: "自動下載並更新")
         alert.addButton(withTitle: "前往網頁下載")
         alert.addButton(withTitle: "取消")

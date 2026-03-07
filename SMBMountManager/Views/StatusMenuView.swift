@@ -21,22 +21,6 @@ struct StatusMenuView: View {
 
         Divider()
 
-        // System services (compact)
-        Menu {
-            let svc = mountManager.systemService
-            Label(
-                "權限修復: \(svc.fixerInstalled ? "已安裝" : "未安裝")",
-                systemImage: svc.fixerInstalled ? "checkmark.circle.fill" : "xmark.circle"
-            )
-            if let ssid = networkMonitor.currentSSID {
-                Label("目前 Wi-Fi: \(ssid)", systemImage: "wifi")
-            }
-        } label: {
-            Label("系統服務狀態", systemImage: "gearshape.2")
-        }
-
-        Divider()
-
         // Quick actions — toggle between pause/resume
         if mountManager.isPaused {
             Button {
@@ -48,7 +32,7 @@ struct StatusMenuView: View {
             Button {
                 let _ = mountManager.unmountAll()
             } label: {
-                Label("暫時退出所有掛載", systemImage: "eject")
+                Label("退出所有掛載", systemImage: "eject")
             }
             .disabled(mountManager.mounts.isEmpty)
         }
@@ -56,6 +40,70 @@ struct StatusMenuView: View {
 
 
         Divider()
+
+        Menu {
+            let activeTasksCount = DownloadManager.shared.tasks.filter { $0.state == .downloading || $0.state == .waiting || $0.state == .paused }.count
+            
+            Text("序列中: \(activeTasksCount)")
+                .font(.callout)
+            
+            let activeTasks = DownloadManager.shared.tasks.filter { $0.state == .downloading || $0.state == .waiting || $0.state == .paused }
+            let totalBytes = activeTasks.reduce(0) { $0 + $1.totalBytes }
+            let downloadedBytes = activeTasks.reduce(0) { $0 + $1.downloadedBytes }
+            let progress = totalBytes > 0 ? (Double(downloadedBytes) / Double(totalBytes)) * 100 : 0
+            
+            Text("下載進度: \(Int(progress))%")
+                .font(.callout)
+            
+            Divider()
+            
+            let isAnyDownloading = DownloadManager.shared.tasks.contains { $0.state == .downloading || $0.state == .waiting }
+            
+            if isAnyDownloading {
+                Button {
+                    DownloadManager.shared.pauseAll()
+                } label: {
+                    Label("暫停全部", systemImage: "pause.fill")
+                }
+            } else {
+                Button {
+                    DownloadManager.shared.startAll()
+                } label: {
+                    Label("繼續全部", systemImage: "play.fill")
+                }
+            }
+            
+            Button {
+                DownloadManager.shared.deleteAllActive()
+            } label: {
+                Label("取消下載", systemImage: "xmark.circle")
+            }
+            
+            Divider()
+
+            Button {
+                DispatchQueue.main.async {
+                    NSApp.activate(ignoringOtherApps: true)
+                    for window in NSApp.windows {
+                        if window.identifier?.rawValue == "main" || window.title == "SMB掛載管理器" {
+                            window.makeKeyAndOrderFront(nil)
+                            NotificationCenter.default.post(name: NSNotification.Name("OpenDownloadsTab"), object: nil)
+                            return
+                        }
+                    }
+                    openWindow(id: "settings")
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        NotificationCenter.default.post(name: NSNotification.Name("OpenDownloadsTab"), object: nil)
+                    }
+                }
+            } label: {
+                Label("下載管理員", systemImage: "arrow.down.circle")
+            }
+            
+        } label: {
+            let activeCount = DownloadManager.shared.tasks.filter { $0.state == .downloading || $0.state == .waiting || $0.state == .paused }.count
+            Label(activeCount > 0 ? "下載狀態 (\(activeCount))" : "下載狀態", systemImage: "arrow.down.circle")
+        }
 
         Button {
             NSApp.activate(ignoringOtherApps: true)
@@ -68,7 +116,7 @@ struct StatusMenuView: View {
                 }
             }
         } label: {
-            Label("設定…", systemImage: "gearshape")
+            Label("開啟主程式…", systemImage: "macwindow")
         }
         .keyboardShortcut(",", modifiers: .command)
 

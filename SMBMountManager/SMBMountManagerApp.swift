@@ -39,6 +39,7 @@ struct SMBMountManagerApp: App {
         networkMonitor.onNetworkChanged = { [weak mountManager] in
             Task { @MainActor in
                 mountManager?.handleNetworkChange()
+                DownloadManager.shared.startAll()
             }
         }
 
@@ -63,11 +64,34 @@ class AppLifecycle {
 struct MenuBarLabel: View {
     @ObservedObject var mountManager: MountManager
     @ObservedObject var settings: AppSettings
+    @StateObject private var downloadManager = DownloadManager.shared
 
     var body: some View {
         HStack(spacing: 3) {
-            Image(systemName: mountManager.overallStatusIcon)
-            if settings.showMountCount && !mountManager.mounts.isEmpty {
+            let activeTasks = downloadManager.tasks.filter { $0.state == .downloading || $0.state == .waiting || $0.state == .paused }
+            let isDownloading = downloadManager.tasks.contains { $0.state == .downloading }
+            let isPaused = !isDownloading && downloadManager.tasks.contains { $0.state == .paused }
+            let hasActiveTasks = !activeTasks.isEmpty
+            
+            if hasActiveTasks {
+                let totalBytes = activeTasks.reduce(0) { $0 + $1.totalBytes }
+                let downloadedBytes = activeTasks.reduce(0) { $0 + $1.downloadedBytes }
+                let progress = totalBytes > 0 ? (CGFloat(downloadedBytes) / CGFloat(totalBytes)) : 0.0
+                
+                Image(nsImage: .downloadProgressRing(progress: progress, isPaused: isPaused))
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(height: 14)
+                
+                if isDownloading {
+                    Text("\(Int(progress * 100))%")
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                }
+            } else {
+                Image(systemName: mountManager.overallStatusIcon)
+            }
+            
+            if settings.showMountCount && !mountManager.mounts.isEmpty && !isDownloading {
                 let connected = mountManager.statuses.values.filter { $0.isMounted && $0.isResponsive }.count
                 let total = mountManager.mounts.count
                 Text("\(connected)/\(total)")
@@ -89,7 +113,7 @@ struct MenuBarLabel: View {
         for url in urls {
             let path = url.path
             let logMsg = "[Services] Received download request for: \(path)"
-            print(logMsg)
+            AppLogger.shared.info(logMsg)
             
             Task { @MainActor in
                 // Try to match the path to a known mount
@@ -97,7 +121,7 @@ struct MenuBarLabel: View {
                     if let mount = mountManager.mounts.first(where: { path.hasPrefix($0.mountPath) }) {
                         var isDirectory: ObjCBool = false
                         guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) else {
-                            print("[Services] File does not exist at path: \(path)")
+                            AppLogger.shared.error("[Services] File does not exist at path: \(path)")
                             return
                         }
                         
@@ -162,7 +186,7 @@ struct MenuBarLabel: View {
                                                     ))
                                                 }
                                             } catch {
-                                                print("[Services] Failed to process file in directory: \(error)")
+                                                AppLogger.shared.error("[Services] Failed to process file in directory: \(error)")
                                             }
                                         }
                                     }
@@ -189,7 +213,14 @@ struct MenuBarLabel: View {
                             }
                         }
                     } else {
-                        print("[Services] Path does not belong to any monitored SMB mount: \(path)")
+                        AppLogger.shared.warn("[Services] Path does not belong to any monitored SMB mount: \(path)")
+                        let alert = NSAlert()
+                        alert.messageText = "不支援的檔案"
+                        alert.informativeText = "此檔案/資料夾不在任何已知的 NAS 掛載點中，無法使用此下載工具。"
+                        alert.alertStyle = .warning
+                        alert.addButton(withTitle: "確定")
+                        NSApp.activate(ignoringOtherApps: true)
+                        alert.runModal()
                     }
                 }
             }
@@ -231,6 +262,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         
         // Let's also proactively clear recent notifications on wake to start fresh
         UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+        
+        Task { @MainActor in
+            DownloadManager.shared.startAll()
+        }
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -250,5 +285,49 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                                 willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         completionHandler([.banner, .sound])
+    }
+}
+
+// MARK: - Progress Ring Graphics Context Extension
+
+extension NSImage {
+    static func downloadProgressRing(progress: CGFloat, isPaused: Bool = false) -> NSImage {
+        let size = NSSize(width: isPaused ? 28 : 16, height: 16)
+        let image = NSImage(size: size)
+        
+        image.lockFocus()
+        let rect = NSRect(x: 0, y: 0, width: 16, height: 16)
+        let path = NSBezierPath(ovalIn: rect.insetBy(dx: 1.5, dy: 1.5))
+        path.lineWidth = 2.0
+        NSColor.black.withAlphaComponent(0.3).setStroke()
+        path.stroke()
+        
+        if progress > 0 {
+            let progressPath = NSBezierPath()
+            let center = NSPoint(x: 16 / 2, y: 16 / 2)
+            let radius = (16.0 / 2) - 1.5
+            
+            let startAngle: CGFloat = 90.0
+            let endAngle = 90.0 - (progress * 360.0)
+            
+            progressPath.appendArc(withCenter: center, radius: radius, startAngle: startAngle, endAngle: endAngle, clockwise: true)
+            progressPath.lineWidth = 2.0
+            progressPath.lineCapStyle = .round
+            NSColor.black.setStroke()
+            progressPath.stroke()
+        }
+        
+        if isPaused {
+            NSColor.black.setFill()
+            let leftBar = NSBezierPath(roundedRect: NSRect(x: 20, y: 3, width: 2.5, height: 10), xRadius: 0.5, yRadius: 0.5)
+            leftBar.fill()
+            
+            let rightBar = NSBezierPath(roundedRect: NSRect(x: 25.5, y: 3, width: 2.5, height: 10), xRadius: 0.5, yRadius: 0.5)
+            rightBar.fill()
+        }
+        
+        image.unlockFocus()
+        image.isTemplate = true
+        return image
     }
 }

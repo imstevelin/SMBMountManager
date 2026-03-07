@@ -41,7 +41,7 @@ actor MountEngine {
         if mount.createDesktopShortcut {
             removeDesktopAlias()
         }
-        log("Engine stopped for '\(mount.name)'")
+        AppLogger.shared.info("Engine stopped for '\(mount.name)'")
     }
 
     // MARK: - Main Mount Loop
@@ -484,24 +484,6 @@ actor MountEngine {
     // MARK: - Logging
 
     nonisolated func log(_ message: String) {
-        let formatter = ISO8601DateFormatter()
-        formatter.timeZone = TimeZone.current
-        let timestamp = formatter.string(from: Date())
-        let line = "\(timestamp) \(message)\n"
-        let logPath = mount.logPath
-
-        // Ensure log directory exists
-        let logDir = (logPath as NSString).deletingLastPathComponent
-        try? FileManager.default.createDirectory(atPath: logDir, withIntermediateDirectories: true)
-
-        if let handle = FileHandle(forWritingAtPath: logPath) {
-            handle.seekToEndOfFile()
-            if let data = line.data(using: .utf8) {
-                handle.write(data)
-            }
-            handle.closeFile()
-        } else {
-            FileManager.default.createFile(atPath: logPath, contents: line.data(using: .utf8))
-        }
+        AppLogger.shared.info("[\(mount.name)] \(message)")
     }
 }
