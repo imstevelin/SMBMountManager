@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		0F7F970E77F6653FA96BC85C /* TransferManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 467DB204A8C932E4FCBB282B /* TransferManagerView.swift */; };
 		14DDD5E03CC93CED970ED99E /* UploadManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 741B05407CDA8F143A501680 /* UploadManager.swift */; };
 		1524674B069F462F8ED4A727 /* MountEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2BE2E966357301663AF2E6 /* MountEngine.swift */; };
 		1864D93C8B48D3F61D7DBC07 /* MountManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C344C0B09CC2F559CD2E7917 /* MountManager.swift */; };
@@ -47,7 +46,6 @@
 		2F2BE2E966357301663AF2E6 /* MountEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MountEngine.swift; sourceTree = "<group>"; };
 		3B0E17451A928E5ABFED4803 /* UploadManagerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadManagerView.swift; sourceTree = "<group>"; };
 		3BDFF8FB7D5E686C6A2580FE /* ConnectionTestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionTestView.swift; sourceTree = "<group>"; };
-		467DB204A8C932E4FCBB282B /* TransferManagerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransferManagerView.swift; sourceTree = "<group>"; };
 		47AB499CA98C0056F31AD88B /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
 		52B42D8C4FFCE43BFB732D60 /* FlowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowLayout.swift; sourceTree = "<group>"; };
 		551F7631DCF024BB47BE3AF4 /* StatusMenuView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusMenuView.swift; sourceTree = "<group>"; };
@@ -108,7 +106,6 @@
 				69902506107BC8BCCFA6E9CA /* MainSettingsView.swift */,
 				01A0C3DE84B1D8FD82683AEF /* MountDetailView.swift */,
 				551F7631DCF024BB47BE3AF4 /* StatusMenuView.swift */,
-				467DB204A8C932E4FCBB282B /* TransferManagerView.swift */,
 				3B0E17451A928E5ABFED4803 /* UploadManagerView.swift */,
 			);
 			path = Views;
@@ -259,7 +256,6 @@
 				B5087423F235BBAB2B71B8AE /* NotificationService.swift in Sources */,
 				2B9144783A2F3CDEB44F020D /* SMBMountManagerApp.swift in Sources */,
 				3EA4567265ADA477D0EF4F9E /* StatusMenuView.swift in Sources */,
-				0F7F970E77F6653FA96BC85C /* TransferManagerView.swift in Sources */,
 				26F4AF1C225CFB74677D4244 /* UpdateService.swift in Sources */,
 				14DDD5E03CC93CED970ED99E /* UploadManager.swift in Sources */,
 				4F17B07C9D0FF55B703C99C9 /* UploadManagerView.swift in Sources */,

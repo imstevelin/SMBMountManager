@@ -57,14 +57,14 @@ struct MainSettingsView: View {
                 .tabItem { Label("掛載點", systemImage: "externaldrive.connected.to.line.below") }
                 .tag(0)
 
-            // Tab 2: Transfers
-            TransferManagerView()
-                .tabItem { Label("傳輸任務", systemImage: "arrow.up.arrow.down.circle") }
+            // Tab 2: Downloads
+            DownloadManagerView()
+                .tabItem { Label("下載任務", systemImage: "arrow.down.circle") }
                 .tag(1)
-
-            // Tab 3: System Services
-            ServicesTabView(mountManager: mountManager, networkMonitor: networkMonitor)
-                .tabItem { Label("服務", systemImage: "gearshape.2") }
+                
+            // Tab 3: Uploads
+            UploadManagerView()
+                .tabItem { Label("上傳任務", systemImage: "arrow.up.circle") }
                 .tag(2)
 
             // Tab 4: Log Viewer
@@ -113,6 +113,9 @@ struct MainSettingsView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenDownloadsTab"))) { _ in
             selectedTab = 1
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenUploadsTab"))) { _ in
+            selectedTab = 2
         }
     }
 }
@@ -170,6 +173,33 @@ struct MountsTabView: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
                         .strokeBorder(Color.red.opacity(0.35), lineWidth: 1)
+                )
+                .padding(.horizontal, 24)
+                .padding(.bottom, 12)
+            }
+            
+            let isAuth = WiFiService.authorizationStatusString == "已授權"
+            if !isAuth {
+                HStack(spacing: 12) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    Text("使用前請先授予「定位服務權限」，以取得當前 Wi-Fi 名稱，否則「網路環境限制」功能將失效。")
+                        .font(.callout)
+                    Spacer()
+                    Button("開啟設定") {
+                        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.orange)
+                }
+                .padding(14)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                .glassEffect(.regular, in: .rect(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .strokeBorder(Color.orange.opacity(0.35), lineWidth: 1)
                 )
                 .padding(.horizontal, 24)
                 .padding(.bottom, 12)
@@ -497,219 +527,7 @@ struct MountCard: View {
     }
 }
 
-// MARK: - Tab 2: System Services
 
-struct ServicesTabView: View {
-    @ObservedObject var mountManager: MountManager
-    @ObservedObject var networkMonitor: NetworkMonitorService
-
-    @State private var showAlert = false
-    @State private var alertTitle = ""
-    @State private var alertMessage = ""
-    @State private var showRemoveConfirm = false
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                // Header
-                HStack(spacing: 12) {
-                    Image(systemName: "gearshape.2")
-                        .font(.title2)
-                        .foregroundStyle(.tint)
-                    Text("服務")
-                        .font(.title2.bold())
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 20)
-
-                // Network Status
-                HStack(spacing: 14) {
-                    ZStack {
-                        Circle()
-                            .fill(networkMonitor.isConnected ? Color.green.opacity(0.12) : Color.red.opacity(0.12))
-                            .frame(width: 44, height: 44)
-                        Image(systemName: networkMonitor.isConnected ? "wifi" : "wifi.slash")
-                            .font(.title3)
-                            .foregroundStyle(networkMonitor.isConnected ? .green : .red)
-                            .symbolEffect(.pulse, options: .repeating, value: !networkMonitor.isConnected)
-                    }
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(networkMonitor.isConnected ? "網路已連線" : "網路已斷線")
-                            .font(.headline)
-                        Text("介面: \(networkMonitor.interfaceDescription)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        if let date = networkMonitor.lastChangeDate {
-                            Text("上次變更: \(date.formatted(.dateTime.hour().minute().second()))")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                        }
-                    }
-                    Spacer()
-                }
-                .padding(14)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
-                .glassEffect(.regular, in: .rect(cornerRadius: 14))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .strokeBorder(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 1)
-                )
-                .shadow(color: .primary.opacity(0.06), radius: 3, y: 1)
-                .padding(.horizontal, 24)
-
-                // Location Services Status
-                HStack(spacing: 14) {
-                    ZStack {
-                        let isAuth = WiFiService.authorizationStatusString == "已授權"
-                        Circle()
-                            .fill(isAuth ? Color.blue.opacity(0.12) : Color.orange.opacity(0.12))
-                            .frame(width: 44, height: 44)
-                        Image(systemName: "location.fill")
-                            .font(.title3)
-                            .foregroundStyle(isAuth ? .blue : .orange)
-                    }
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("定位服務權限")
-                            .font(.headline)
-                        Text("狀態: \(WiFiService.authorizationStatusString)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text("取得當前 Wi-Fi 名稱 (SSID) 需要定位服務權限，否則「網路環境限制」功能將失效。")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer()
-                }
-                .padding(14)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
-                .glassEffect(.regular, in: .rect(cornerRadius: 14))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .strokeBorder(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 1)
-                )
-                .shadow(color: .primary.opacity(0.06), radius: 3, y: 1)
-                .padding(.horizontal, 24)
-
-                // In-Process Engine Status
-                serviceCard(
-                    icon: "eye",
-                    title: "掛載引擎",
-                    description: "應用程式內建的掛載與監控引擎，啟動時自動連線所有掛載點，持續監控健康狀態並自動修復失效連線。",
-                    isInstalled: true,
-                    isRunning: !mountManager.isPaused
-                )
-
-                // Fixer Service
-                serviceCard(
-                    icon: "wrench.and.screwdriver",
-                    title: "系統權限修復服務",
-                    description: "系統層級服務，開機時自動修復 /Volumes 目錄權限（chmod 1777, chown root:admin），需管理員授權安裝。",
-                    isInstalled: mountManager.systemService.fixerInstalled,
-                    isRunning: nil
-                )
-
-                // Action buttons
-                HStack(spacing: 12) {
-                    Button(role: .destructive) {
-                        showRemoveConfirm = true
-                    } label: {
-                        Label("移除權限修復服務", systemImage: "trash")
-                    }
-
-                    Spacer()
-                }
-                .padding(.horizontal, 24)
-            }
-            .padding(.bottom, 24)
-        }
-        .confirmationDialog("危險操作", isPresented: $showRemoveConfirm) {
-            Button("確定移除", role: .destructive) {
-                let ok = LaunchdService.removeFixer()
-                mountManager.refresh()
-                alertTitle = ok ? "操作成功" : "操作失敗"
-                alertMessage = ok ? "權限修復服務已移除。" : "移除失敗，您可能取消了授權。"
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    NSApp.activate(ignoringOtherApps: true)
-                    showAlert = true
-                }
-            }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("您確定要移除系統權限修復服務嗎？這可能會導致未來掛載點發生權限異常錯誤。")
-        }
-        .alert(alertTitle, isPresented: $showAlert) {
-            Button("確定") {
-                DispatchQueue.main.async { NSApp.activate(ignoringOtherApps: true) }
-            }
-        } message: { Text(alertMessage) }
-        .onChange(of: showAlert) { newValue in
-            if !newValue {
-                DispatchQueue.main.async {
-                    NSApp.mainWindow?.makeKeyAndOrderFront(nil)
-                }
-            }
-        }
-    }
-
-    private func serviceCard(icon: String, title: String, description: String, isInstalled: Bool, isRunning: Bool?) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 14) {
-                ZStack {
-                    Circle()
-                        .fill(isInstalled ? Color.blue.opacity(0.12) : Color.secondary.opacity(0.08))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: icon)
-                        .font(.title3)
-                        .foregroundStyle(isInstalled ? .blue : .secondary)
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text(title)
-                            .font(.headline)
-                        Spacer()
-                        if let running = isRunning {
-                            statusBadge(running ? "運行中" : "已停止", color: running ? .green : .orange)
-                        } else {
-                            statusBadge(isInstalled ? "已安裝" : "未安裝", color: isInstalled ? .green : .red)
-                        }
-                    }
-                    Text(description)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(3)
-                }
-            }
-            .padding(14)
-        }
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
-        .glassEffect(.regular, in: .rect(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 1)
-        )
-        .shadow(color: .primary.opacity(0.06), radius: 3, y: 1)
-        .padding(.horizontal, 24)
-    }
-
-    private func statusBadge(_ text: String, color: Color) -> some View {
-        HStack(spacing: 5) {
-            Circle()
-                .fill(color)
-                .frame(width: 7, height: 7)
-            Text(text)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 4)
-        .background(.ultraThinMaterial, in: Capsule())
-        .glassEffect(.regular, in: .capsule)
-    }
-}
 
 // MARK: - Tab 3: Log Viewer
 
@@ -852,6 +670,10 @@ struct LogLineView: View {
 struct PreferencesTabView: View {
     @ObservedObject var mountManager: MountManager
     @EnvironmentObject var settings: AppSettings
+    @State private var showRemoveConfirm = false
+    @State private var showAlert = false
+    @State private var alertTitle = ""
+    @State private var alertMessage = ""
 
     var body: some View {
         Form {
@@ -900,6 +722,14 @@ struct PreferencesTabView: View {
                 }
                 HStack {
                     Spacer()
+                    Button("移除權限修復服務...") {
+                        showRemoveConfirm = true
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.red)
+                }
+                HStack {
+                    Spacer()
                     Text("© 2026 SMB 掛載管理器")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
@@ -909,6 +739,33 @@ struct PreferencesTabView: View {
         }
         .formStyle(.grouped)
         .padding(.top, 8)
+        .confirmationDialog("危險操作", isPresented: $showRemoveConfirm) {
+            Button("確定移除", role: .destructive) {
+                let ok = LaunchdService.removeFixer()
+                mountManager.refresh()
+                alertTitle = ok ? "操作成功" : "操作失敗"
+                alertMessage = ok ? "權限修復服務已移除。" : "移除失敗，您可能取消了授權。"
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    NSApp.activate(ignoringOtherApps: true)
+                    showAlert = true
+                }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("您確定要移除系統權限修復服務嗎？這可能會導致未來掛載點發生權限異常錯誤。")
+        }
+        .alert(alertTitle, isPresented: $showAlert) {
+            Button("確定") {
+                DispatchQueue.main.async { NSApp.activate(ignoringOtherApps: true) }
+            }
+        } message: { Text(alertMessage) }
+        .onChange(of: showAlert) { newValue in
+            if !newValue {
+                DispatchQueue.main.async {
+                    NSApp.mainWindow?.makeKeyAndOrderFront(nil)
+                }
+            }
+        }
     }
 
     // Pass environment mountmanager here or use notification.

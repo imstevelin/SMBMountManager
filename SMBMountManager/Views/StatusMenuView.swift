@@ -105,6 +105,70 @@ struct StatusMenuView: View {
             Label(activeCount > 0 ? "下載狀態 (\(activeCount))" : "下載狀態", systemImage: "arrow.down.circle")
         }
 
+        Menu {
+            let activeTasksCount = UploadManager.shared.tasks.filter { $0.state == .uploading || $0.state == .waiting || $0.state == .paused }.count
+            
+            Text("序列中: \(activeTasksCount)")
+                .font(.callout)
+            
+            let activeTasks = UploadManager.shared.tasks.filter { $0.state == .uploading || $0.state == .waiting || $0.state == .paused }
+            let totalBytes = activeTasks.reduce(0) { $0 + $1.totalBytes }
+            let uploadedBytes = activeTasks.reduce(0) { $0 + $1.uploadedBytes }
+            let progress = totalBytes > 0 ? (Double(uploadedBytes) / Double(totalBytes)) * 100 : 0
+            
+            Text("上傳進度: \(Int(progress))%")
+                .font(.callout)
+            
+            Divider()
+            
+            let isAnyUploading = UploadManager.shared.tasks.contains { $0.state == .uploading || $0.state == .waiting }
+            
+            if isAnyUploading {
+                Button {
+                    UploadManager.shared.pauseAll()
+                } label: {
+                    Label("暫停全部", systemImage: "pause.fill")
+                }
+            } else {
+                Button {
+                    UploadManager.shared.resumeAll()
+                } label: {
+                    Label("繼續全部", systemImage: "play.fill")
+                }
+            }
+            
+            Button {
+                UploadManager.shared.deleteAllActive()
+            } label: {
+                Label("取消上傳", systemImage: "xmark.circle")
+            }
+            
+            Divider()
+
+            Button {
+                DispatchQueue.main.async {
+                    NSApp.activate(ignoringOtherApps: true)
+                    for window in NSApp.windows {
+                        if window.identifier?.rawValue == "main" || window.title == "SMB掛載管理器" {
+                            window.makeKeyAndOrderFront(nil)
+                            NotificationCenter.default.post(name: NSNotification.Name("OpenUploadsTab"), object: nil)
+                            return
+                        }
+                    }
+                    openWindow(id: "settings")
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        NotificationCenter.default.post(name: NSNotification.Name("OpenUploadsTab"), object: nil)
+                    }
+                }
+            } label: {
+                Label("上傳管理員", systemImage: "arrow.up.circle")
+            }
+            
+        } label: {
+            let activeCount = UploadManager.shared.tasks.filter { $0.state == .uploading || $0.state == .waiting || $0.state == .paused }.count
+            Label(activeCount > 0 ? "上傳狀態 (\(activeCount))" : "上傳狀態", systemImage: "arrow.up.circle")
+        }
+
         Button {
             NSApp.activate(ignoringOtherApps: true)
             DispatchQueue.main.async {
