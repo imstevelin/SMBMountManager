@@ -248,10 +248,16 @@ class UploadManager: ObservableObject {
         
         if let idx = tasks.firstIndex(where: { $0.id == id }) {
             let task = tasks[idx]
+            
+            // Note: User requested to explicitly delete `.smbupload` when a task is cancelled.
+            if let mount = AppLifecycle.shared.mountManager?.mounts.first(where: { $0.id == task.mountId }) {
+                let destURL = URL(fileURLWithPath: mount.mountPath).appendingPathComponent(task.relativeSMBPath)
+                let uploadURL = destURL.appendingPathExtension("smbupload")
+                try? FileManager.default.removeItem(at: uploadURL)
+            }
+            
             tasks.remove(at: idx)
             saveTasks()
-            
-            // Note: we don't automatically delete the interrupted `.smbupload` file on the NAS to allow for manual recovery.
         }
         processNextTasks()
     }
@@ -270,6 +276,13 @@ class UploadManager: ObservableObject {
             }
             
             await MainActor.run {
+                for task in self.tasks where activeTaskIds.contains(task.id) {
+                    if let mount = AppLifecycle.shared.mountManager?.mounts.first(where: { $0.id == task.mountId }) {
+                        let destURL = URL(fileURLWithPath: mount.mountPath).appendingPathComponent(task.relativeSMBPath)
+                        let uploadURL = destURL.appendingPathExtension("smbupload")
+                        try? FileManager.default.removeItem(at: uploadURL)
+                    }
+                }
                 self.tasks.removeAll { activeTaskIds.contains($0.id) }
                 self.saveTasks()
                 self.processNextTasks()
@@ -370,6 +383,12 @@ class UploadManager: ObservableObject {
                 NotificationCenter.default.post(name: NSNotification.Name("UploadTaskCompleted"), object: nil, userInfo: ["fileName": tasks[index].sourceURL.lastPathComponent])
             } else if finalState == .error {
                 AppLogger.shared.error("[UploadManager] Task failed: \(tasks[index].sourceURL.lastPathComponent)")
+                // User requested to explicitly delete `.smbupload` upon failure.
+                if let mount = AppLifecycle.shared.mountManager?.mounts.first(where: { $0.id == tasks[index].mountId }) {
+                    let destURL = URL(fileURLWithPath: mount.mountPath).appendingPathComponent(tasks[index].relativeSMBPath)
+                    let uploadURL = destURL.appendingPathExtension("smbupload")
+                    try? FileManager.default.removeItem(at: uploadURL)
+                }
             }
         }
         

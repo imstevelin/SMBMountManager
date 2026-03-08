@@ -242,7 +242,7 @@ struct MenuBarLabel: View {
                                         for case let fileURL as URL in enumerator {
                                             do {
                                                 let resourceValues = try fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
-                                                if resourceValues.isRegularFile == true {
+                                                if resourceValues.isRegularFile == true && fileURL.lastPathComponent != ".DS_Store" {
                                                     let fileSize = UInt64(resourceValues.fileSize ?? 0)
                                                     // Extract relative path from base URL
                                                     let relativePathToFile = fileURL.path.replacingOccurrences(of: url.path + "/", with: "")
@@ -370,7 +370,7 @@ struct MenuBarLabel: View {
                                  for case let fileURL as URL in enumerator {
                                      do {
                                          let resourceValues = try fileURL.resourceValues(forKeys: [.isRegularFileKey])
-                                         if resourceValues.isRegularFile == true {
+                                         if resourceValues.isRegularFile == true && fileURL.lastPathComponent != ".DS_Store" {
                                              let relativePathToFile = fileURL.path.replacingOccurrences(of: localURL.path + "/", with: "")
                                              let targetFolderURL = destinationURL.appendingPathComponent(localURL.lastPathComponent)
                                              let specificDestURL = targetFolderURL.appendingPathComponent(relativePathToFile)

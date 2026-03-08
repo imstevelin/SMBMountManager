@@ -340,6 +340,8 @@ class DownloadManager: ObservableObject {
                 AppLogger.shared.info("[DownloadManager] Completed task: \(tasks[index].fileName)")
             } else if finalState == .error {
                 AppLogger.shared.error("[DownloadManager] Task failed: \(tasks[index].fileName)")
+                // User requested to delete the partial file upon failure
+                try? FileManager.default.removeItem(at: tasks[index].destinationURL)
             }
         }
         
