@@ -344,7 +344,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.2.4;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = org.imstevelin.SMBMountManager;
 				PRODUCT_NAME = "SMB掛載管理器";
 				SDKROOT = macosx;
@@ -366,7 +366,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.2.4;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = org.imstevelin.SMBMountManager;
 				PRODUCT_NAME = "SMB掛載管理器";
 				SDKROOT = macosx;
