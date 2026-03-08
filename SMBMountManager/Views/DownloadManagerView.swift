@@ -14,7 +14,7 @@ struct DownloadManagerView: View {
         if selectedTab == .active {
             return downloadManager.tasks.filter { $0.state != .completed }
         } else {
-            return downloadManager.tasks.filter { $0.state == .completed }
+            return downloadManager.tasks.filter { $0.state == .completed }.reversed()
         }
     }
 

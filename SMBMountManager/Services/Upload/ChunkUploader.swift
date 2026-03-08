@@ -40,6 +40,15 @@ class ChunkUploader {
         let uploadURL = destURL.appendingPathExtension("smbupload")
         
         do {
+            // CRITICAL SAFETY CHECK: Ensure the SMB mount point is actually mounted and accessible.
+            // If the network drops, MacOS might sometimes let us create a local folder at the mount path.
+            // We must verify the root mount path exists and is a directory before proceeding.
+            var isMountDir: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: mount.mountPath, isDirectory: &isMountDir), isMountDir.boolValue else {
+                fail(with: "掛載點目前無法存取，為防止建立虛假路徑，已中止上傳。")
+                return
+            }
+            
             // Check local file access and size
             if !FileManager.default.fileExists(atPath: localSourceURL.path) {
                 fail(with: "本機來源檔案不存在")

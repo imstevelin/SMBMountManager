@@ -13,6 +13,7 @@ class DownloadManager: ObservableObject {
     // Add max concurrent task limit
     private let maxConcurrentTasks = 5
     private var downloaders: [UUID: ChunkDownloader] = [:]
+    private var isPausingAll: Bool = false
     
     // Download speed tracking
     @Published var currentSpeedBytesPerSecond: Int64 = 0
@@ -138,6 +139,7 @@ class DownloadManager: ObservableObject {
     }
     
     private func processQueue() {
+        guard !isPausingAll else { return }
         let activeTaskCount = tasks.filter { $0.state == .downloading }.count
         guard activeTaskCount < maxConcurrentTasks else { return }
         
@@ -223,18 +225,30 @@ class DownloadManager: ObservableObject {
     }
     
     func pauseAll() {
+        isPausingAll = true
+        let taskIdsToPause = tasks.filter { $0.state == .downloading || $0.state == .waiting }.map { $0.id }
+        
         for index in tasks.indices where tasks[index].state == .downloading || tasks[index].state == .waiting {
             tasks[index].state = .paused
-            
-            let id = tasks[index].id
-            Task {
-                await downloaders[id]?.pause()
-                DispatchQueue.main.async {
-                    self.downloaders.removeValue(forKey: id)
+        }
+        self.saveTasks()
+        
+        Task {
+            await withTaskGroup(of: Void.self) { group in
+                for id in taskIdsToPause {
+                    if let downloader = self.downloaders[id] {
+                        group.addTask { await downloader.pause() }
+                    }
                 }
             }
+            await MainActor.run {
+                for id in taskIdsToPause {
+                    self.downloaders.removeValue(forKey: id)
+                }
+                self.isPausingAll = false
+                self.processQueue()
+            }
         }
-        saveTasks()
     }
     
     func deleteAllActive() {

@@ -13,6 +13,7 @@ class UploadManager: ObservableObject {
     // Limits concurrent SMB writes to 1 to prevent NAS storage locks and connection unresponsiveness
     private let maxConcurrentTasks = 1
     private var uploaders: [UUID: ChunkUploader] = [:]
+    private var isPausingAll: Bool = false
     
     // Upload speed tracking
     @Published var currentSpeedBytesPerSecond: Int64 = 0
@@ -162,6 +163,7 @@ class UploadManager: ObservableObject {
     }
     
     func pauseAll() {
+        isPausingAll = true
         let taskIdsToPause = tasks.filter { $0.state == .uploading || $0.state == .waiting }.map { $0.id }
         
         for index in tasks.indices {
@@ -171,13 +173,19 @@ class UploadManager: ObservableObject {
         }
         self.saveTasks()
         
-        for id in taskIdsToPause {
-            if let uploader = uploaders[id] {
-                Task { await uploader.pause() }
+        Task {
+            await withTaskGroup(of: Void.self) { group in
+                for id in taskIdsToPause {
+                    if let uploader = self.uploaders[id] {
+                        group.addTask { await uploader.pause() }
+                    }
+                }
+            }
+            await MainActor.run {
+                self.isPausingAll = false
+                self.processNextTasks()
             }
         }
-        
-        processNextTasks()
     }
     
     func resumeTask(id: UUID) {
@@ -255,6 +263,7 @@ class UploadManager: ObservableObject {
     }
     
     private func processNextTasks() {
+        guard !isPausingAll else { return }
         let uploadingCount = tasks.filter { $0.state == .uploading }.count
         let availableSlots = maxConcurrentTasks - uploadingCount
         

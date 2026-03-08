@@ -14,7 +14,7 @@ struct UploadManagerView: View {
         if selectedTab == .active {
             return uploadManager.tasks.filter { $0.state != .completed }
         } else {
-            return uploadManager.tasks.filter { $0.state == .completed }
+            return uploadManager.tasks.filter { $0.state == .completed }.reversed()
         }
     }
 
