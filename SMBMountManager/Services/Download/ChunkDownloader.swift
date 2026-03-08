@@ -11,9 +11,6 @@ class ChunkDownloader {
     private let taskLock = NSLock()
     private var lastProgressUpdateTime: Date = Date()
     
-    /// Atomic byte counter readable by the speed timer — updated on every chunk write, not throttled.
-    private(set) var currentBytesRead: UInt64 = 0
-    
     init(task: DownloadTaskModel, onProgress: @escaping (DownloadTaskModel) -> Void) {
         self.task = task
         self.onProgress = onProgress
@@ -171,13 +168,10 @@ class ChunkDownloader {
             currentOffset += UInt64(data.count)
             let downloaded = currentOffset - chunk.startOffset
             
-            // Update atomic counter immediately for speed measurement
-            self.currentBytesRead = self.task.downloadedBytes + downloaded
-            
             let now = Date()
             taskLock.lock()
             self.task.chunks[index].downloadedBytes = downloaded
-            let shouldUpdate = now.timeIntervalSince(self.lastProgressUpdateTime) > 0.25 || currentOffset >= endOffset
+            let shouldUpdate = now.timeIntervalSince(self.lastProgressUpdateTime) > 0.10 || currentOffset >= endOffset
             if shouldUpdate {
                 self.lastProgressUpdateTime = now
             }
@@ -185,9 +179,7 @@ class ChunkDownloader {
             taskLock.unlock()
             
             if shouldUpdate {
-                DispatchQueue.main.async {
-                    self.onProgress(updatedTask)
-                }
+                self.onProgress(updatedTask)
             }
             
             try? await Task.sleep(nanoseconds: 10_000_000)
@@ -201,9 +193,7 @@ class ChunkDownloader {
         let updatedTask = task
         taskLock.unlock()
         
-        DispatchQueue.main.async {
-            self.onProgress(updatedTask)
-        }
+        self.onProgress(updatedTask)
     }
     
     private func completeTask() {
@@ -212,8 +202,6 @@ class ChunkDownloader {
         let updatedTask = task
         taskLock.unlock()
         
-        DispatchQueue.main.async {
-            self.onProgress(updatedTask)
-        }
+        self.onProgress(updatedTask)
     }
 }

@@ -11,9 +11,6 @@ class ChunkUploader {
     private let taskLock = NSLock()
     private var lastProgressUpdateTime: Date = Date()
     
-    /// Atomic byte counter readable by the speed timer — updated on every chunk write, not throttled.
-    private(set) var currentBytesWritten: UInt64 = 0
-    
     init(task: UploadTaskModel, onProgress: @escaping (UploadTaskModel) -> Void) {
         self.task = task
         self.onProgress = onProgress
@@ -144,14 +141,11 @@ class ChunkUploader {
             try writeHandle.write(contentsOf: data)
             currentOffset += UInt64(data.count)
             
-            // Update atomic counter immediately (not throttled) for speed measurement
-            self.currentBytesWritten = currentOffset
-            
             let now = Date()
             taskLock.lock()
             self.task.uploadedBytes = currentOffset
             
-            let shouldUpdate = now.timeIntervalSince(self.lastProgressUpdateTime) > 0.25 || currentOffset >= totalSize
+            let shouldUpdate = now.timeIntervalSince(self.lastProgressUpdateTime) > 0.10 || currentOffset >= totalSize
             if shouldUpdate {
                 self.lastProgressUpdateTime = now
             }
@@ -159,9 +153,7 @@ class ChunkUploader {
             taskLock.unlock()
             
             if shouldUpdate {
-                DispatchQueue.main.async {
-                    self.onProgress(updatedTask)
-                }
+                self.onProgress(updatedTask)
             }
             
             // Explicitly sleep for 10ms to give the macOS SMB kernel driver breathing room
@@ -190,9 +182,7 @@ class ChunkUploader {
         let updatedTask = task
         taskLock.unlock()
         
-        DispatchQueue.main.async {
-            self.onProgress(updatedTask)
-        }
+        self.onProgress(updatedTask)
     }
     
     private func completeTask() {
@@ -201,9 +191,7 @@ class ChunkUploader {
         let updatedTask = task
         taskLock.unlock()
         
-        DispatchQueue.main.async {
-            self.onProgress(updatedTask)
-        }
+        self.onProgress(updatedTask)
     }
     
     /// Verifies that a mount path is actually backed by a real mounted network filesystem,

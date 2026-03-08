@@ -39,7 +39,7 @@ class UploadManager: ObservableObject {
     private func startSpeedMeasurement() {
         speedTimer?.invalidate()
         lastSpeedSampleTime = Date()
-        lastTotalBytesUploaded = 0
+        lastTotalBytesUploaded = tasks.reduce(UInt64(0)) { $0 + $1.uploadedBytes }
         
         speedTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -49,19 +49,12 @@ class UploadManager: ObservableObject {
                 guard elapsed > 0.1 else { return }
                 self.lastSpeedSampleTime = now
                 
-                // Read directly from active uploaders' atomic byte counters (not throttled)
-                let isUploading = !self.uploaders.isEmpty
-                var liveTotal: UInt64 = 0
-                for (_, uploader) in self.uploaders {
-                    liveTotal += uploader.currentBytesWritten
-                }
-                // Also add bytes from completed tasks
-                let completedBytes = self.tasks.filter { $0.state == .completed }.reduce(UInt64(0)) { $0 + $1.totalBytes }
-                liveTotal += completedBytes
+                let currentTotal = self.tasks.reduce(UInt64(0)) { $0 + $1.uploadedBytes }
+                let isUploading = self.tasks.contains { $0.state == .uploading }
                 
                 if isUploading {
-                    let bytesDelta = liveTotal >= self.lastTotalBytesUploaded
-                        ? Double(liveTotal - self.lastTotalBytesUploaded)
+                    let bytesDelta = currentTotal >= self.lastTotalBytesUploaded
+                        ? Double(currentTotal - self.lastTotalBytesUploaded)
                         : 0.0
                     let instantSpeed = bytesDelta / elapsed
                     
@@ -79,7 +72,7 @@ class UploadManager: ObservableObject {
                     self.currentSpeedBytesPerSecond = Int64(self.emaSpeed)
                 }
                 
-                self.lastTotalBytesUploaded = liveTotal
+                self.lastTotalBytesUploaded = currentTotal
             }
         }
     }

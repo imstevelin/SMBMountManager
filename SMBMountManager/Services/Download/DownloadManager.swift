@@ -39,7 +39,7 @@ class DownloadManager: ObservableObject {
     private func startSpeedMeasurement() {
         speedTimer?.invalidate()
         lastSpeedSampleTime = Date()
-        lastTotalBytesDownloaded = 0
+        lastTotalBytesDownloaded = tasks.reduce(UInt64(0)) { $0 + $1.downloadedBytes }
         
         speedTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -49,19 +49,12 @@ class DownloadManager: ObservableObject {
                 guard elapsed > 0.1 else { return }
                 self.lastSpeedSampleTime = now
                 
-                // Read directly from active downloaders' atomic byte counters (not throttled)
-                let isDownloading = !self.downloaders.isEmpty
-                var liveTotal: UInt64 = 0
-                for (_, downloader) in self.downloaders {
-                    liveTotal += downloader.currentBytesRead
-                }
-                // Also add bytes from completed tasks
-                let completedBytes = self.tasks.filter { $0.state == .completed }.reduce(UInt64(0)) { $0 + $1.totalBytes }
-                liveTotal += completedBytes
+                let currentTotal = self.tasks.reduce(UInt64(0)) { $0 + $1.downloadedBytes }
+                let isDownloading = self.tasks.contains { $0.state == .downloading }
                 
                 if isDownloading {
-                    let bytesDelta = liveTotal >= self.lastTotalBytesDownloaded
-                        ? Double(liveTotal - self.lastTotalBytesDownloaded)
+                    let bytesDelta = currentTotal >= self.lastTotalBytesDownloaded
+                        ? Double(currentTotal - self.lastTotalBytesDownloaded)
                         : 0.0
                     let instantSpeed = bytesDelta / elapsed
                     
@@ -79,7 +72,7 @@ class DownloadManager: ObservableObject {
                     self.currentSpeedBytesPerSecond = Int64(self.emaSpeed)
                 }
                 
-                self.lastTotalBytesDownloaded = liveTotal
+                self.lastTotalBytesDownloaded = currentTotal
             }
         }
     }
