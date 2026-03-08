@@ -283,28 +283,53 @@ class UploadManager: ObservableObject {
         }
         
         let uploader = ChunkUploader(task: task) { [weak self] updatedTask in
-            guard let self = self else { return }
-            
             Task { @MainActor in
-                if let index = self.tasks.firstIndex(where: { $0.id == updatedTask.id }) {
-                    self.tasks[index] = updatedTask
-                    
-                    if updatedTask.state == .completed || updatedTask.state == .error || updatedTask.state == .paused {
-                        self.uploaders.removeValue(forKey: updatedTask.id)
-                        self.saveTasks()
-                        self.processNextTasks()
-                        
-                        if updatedTask.state == .completed {
-                            NotificationCenter.default.post(name: NSNotification.Name("UploadTaskCompleted"), object: nil, userInfo: ["fileName": updatedTask.sourceURL.lastPathComponent])
-                        }
-                    }
-                }
+                self?.updateTask(updatedTask)
             }
         }
         
         uploaders[task.id] = uploader
         Task {
             await uploader.start()
+        }
+    }
+    
+    // MARK: - Update Loop
+    
+    private func updateTask(_ task: UploadTaskModel) {
+        guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
+        
+        let currentState = tasks[index].state
+        var updatedTask = task
+        
+        // Anti-bounce mechanism to prevent slow async packets from overwriting user UI intent
+        if (currentState == .paused || currentState == .completed || currentState == .error) && task.state == .uploading {
+            updatedTask.state = currentState
+        }
+        
+        // Retain totalBytes if we already have it
+        if updatedTask.totalBytes == 0 && tasks[index].totalBytes > 0 {
+            updatedTask.totalBytes = tasks[index].totalBytes
+        }
+        
+        tasks[index] = updatedTask
+        
+        let finalState = tasks[index].state
+        if finalState != currentState {
+            if finalState == .completed {
+                AppLogger.shared.info("[UploadManager] Completed task: \(tasks[index].sourceURL.lastPathComponent)")
+                NotificationCenter.default.post(name: NSNotification.Name("UploadTaskCompleted"), object: nil, userInfo: ["fileName": tasks[index].sourceURL.lastPathComponent])
+            } else if finalState == .error {
+                AppLogger.shared.error("[UploadManager] Task failed: \(tasks[index].sourceURL.lastPathComponent)")
+            }
+        }
+        
+        if finalState == .completed || finalState == .error || finalState == .paused {
+            saveTasks()
+            if finalState == .completed || finalState == .error {
+                uploaders.removeValue(forKey: task.id)
+                processNextTasks()
+            }
         }
     }
 }
