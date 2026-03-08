@@ -139,6 +139,12 @@ class ChunkUploader {
             
             // Write to SMB mount
             try writeHandle.write(contentsOf: data)
+            
+            // CRITICAL: Force the macOS kernel to flush the write buffer to the SMB server.
+            // Without synchronize(), the kernel buffers gigabytes of data in RAM, causing the 
+            // loop to finish instantly (0% -> 100% jump) and then hang on `close()` while speed drops to 0.
+            try writeHandle.synchronize()
+            
             currentOffset += UInt64(data.count)
             
             let now = Date()
