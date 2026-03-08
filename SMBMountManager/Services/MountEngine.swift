@@ -316,25 +316,6 @@ actor MountEngine {
         return volumes.contains(url)
     }
 
-    nonisolated func isMountResponsive() -> Bool {
-        let task = Process()
-        task.launchPath = "/usr/bin/stat"
-        task.arguments = [mount.mountPath]
-        task.standardOutput = FileHandle.nullDevice
-        task.standardError = FileHandle.nullDevice
-
-        do { try task.run() } catch { return false }
-
-        let deadline = Date().addingTimeInterval(3)
-        while task.isRunning && Date() < deadline {
-            Thread.sleep(forTimeInterval: 0.1)
-        }
-        if task.isRunning {
-            task.terminate()
-            return false
-        }
-        return task.terminationStatus == 0
-    }
 
     // MARK: - Helpers
 

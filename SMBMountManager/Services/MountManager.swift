@@ -22,7 +22,7 @@ class MountManager: ObservableObject {
     /// Health monitor timer
     private var monitorTimer: Timer?
     private var monitorInterval: TimeInterval {
-        return 5.0
+        return 10.0
     }
 
     /// Stale mount tracking
@@ -862,7 +862,9 @@ class MountManager: ObservableObject {
 
         do { try task.run() } catch { return false }
 
-        let deadline = Date().addingTimeInterval(3)
+        // Give stat up to 10 seconds to respond. 
+        // Under heavy SMB bulk file transfer the smbfs driver queue delays stats severely.
+        let deadline = Date().addingTimeInterval(10)
         while task.isRunning && Date() < deadline {
             try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 sec
         }

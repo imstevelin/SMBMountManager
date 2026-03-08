@@ -179,6 +179,8 @@ class ChunkDownloader {
                     self.onProgress(updatedTask)
                 }
             }
+            
+            try? await Task.sleep(nanoseconds: 10_000_000)
         }
     }
     

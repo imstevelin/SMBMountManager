@@ -5,8 +5,8 @@ class ChunkUploader {
     private let onProgress: (UploadTaskModel) -> Void
     private var isPaused = false
     
-    // Chunk size: 4MB per chunk for optimal SMB transfer balance 
-    private let chunkSize: UInt64 = 4 * 1024 * 1024 
+    // Chunk size: 1MB per chunk for optimal SMB transfer balance, allowing the kernel to interleave other commands
+    private let chunkSize: UInt64 = 1 * 1024 * 1024 
     
     private let taskLock = NSLock()
     private var lastProgressUpdateTime: Date = Date()
@@ -145,8 +145,9 @@ class ChunkUploader {
                 }
             }
             
-            // Yield to allow task cancellation / pausing checks
-            await Task.yield()
+            // Explicitly sleep for 10ms to give the macOS SMB kernel driver breathing room
+            // for processing `stat` and directory enumeration queries concurrently.
+            try? await Task.sleep(nanoseconds: 10_000_000)
         }
         
         if isPaused { return }
