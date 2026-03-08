@@ -39,7 +39,7 @@ class UploadManager: ObservableObject {
     private func startSpeedMeasurement() {
         speedTimer?.invalidate()
         lastSpeedSampleTime = Date()
-        lastTotalBytesUploaded = tasks.reduce(UInt64(0)) { $0 + $1.uploadedBytes }
+        lastTotalBytesUploaded = 0
         
         speedTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -49,25 +49,29 @@ class UploadManager: ObservableObject {
                 guard elapsed > 0.1 else { return }
                 self.lastSpeedSampleTime = now
                 
-                let currentTotal = self.tasks.reduce(UInt64(0)) { $0 + $1.uploadedBytes }
-                let isUploading = self.tasks.contains { $0.state == .uploading }
+                // Read directly from active uploaders' atomic byte counters (not throttled)
+                let isUploading = !self.uploaders.isEmpty
+                var liveTotal: UInt64 = 0
+                for (_, uploader) in self.uploaders {
+                    liveTotal += uploader.currentBytesWritten
+                }
+                // Also add bytes from completed tasks
+                let completedBytes = self.tasks.filter { $0.state == .completed }.reduce(UInt64(0)) { $0 + $1.totalBytes }
+                liveTotal += completedBytes
                 
                 if isUploading {
-                    let bytesDelta = currentTotal >= self.lastTotalBytesUploaded
-                        ? Double(currentTotal - self.lastTotalBytesUploaded)
+                    let bytesDelta = liveTotal >= self.lastTotalBytesUploaded
+                        ? Double(liveTotal - self.lastTotalBytesUploaded)
                         : 0.0
-                    let instantSpeed = bytesDelta / elapsed  // bytes per second
+                    let instantSpeed = bytesDelta / elapsed
                     
-                    // EMA: smoothedSpeed = α * newSample + (1 - α) * previousSmoothed
                     if self.emaSpeed == 0 && instantSpeed > 0 {
-                        // First non-zero sample — seed the EMA to avoid slow ramp-up
                         self.emaSpeed = instantSpeed
                     } else {
                         self.emaSpeed = self.emaSmoothingFactor * instantSpeed + (1.0 - self.emaSmoothingFactor) * self.emaSpeed
                     }
                     self.currentSpeedBytesPerSecond = Int64(self.emaSpeed)
                 } else {
-                    // Graceful decay: wind down smoothly instead of snapping to 0
                     self.emaSpeed *= 0.4
                     if self.emaSpeed < 1024 {
                         self.emaSpeed = 0
@@ -75,7 +79,7 @@ class UploadManager: ObservableObject {
                     self.currentSpeedBytesPerSecond = Int64(self.emaSpeed)
                 }
                 
-                self.lastTotalBytesUploaded = currentTotal
+                self.lastTotalBytesUploaded = liveTotal
             }
         }
     }

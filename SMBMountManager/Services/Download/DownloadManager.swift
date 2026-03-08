@@ -39,7 +39,7 @@ class DownloadManager: ObservableObject {
     private func startSpeedMeasurement() {
         speedTimer?.invalidate()
         lastSpeedSampleTime = Date()
-        lastTotalBytesDownloaded = tasks.reduce(UInt64(0)) { $0 + $1.downloadedBytes }
+        lastTotalBytesDownloaded = 0
         
         speedTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -49,25 +49,29 @@ class DownloadManager: ObservableObject {
                 guard elapsed > 0.1 else { return }
                 self.lastSpeedSampleTime = now
                 
-                let currentTotal = self.tasks.reduce(UInt64(0)) { $0 + $1.downloadedBytes }
-                let isDownloading = self.tasks.contains { $0.state == .downloading }
+                // Read directly from active downloaders' atomic byte counters (not throttled)
+                let isDownloading = !self.downloaders.isEmpty
+                var liveTotal: UInt64 = 0
+                for (_, downloader) in self.downloaders {
+                    liveTotal += downloader.currentBytesRead
+                }
+                // Also add bytes from completed tasks
+                let completedBytes = self.tasks.filter { $0.state == .completed }.reduce(UInt64(0)) { $0 + $1.totalBytes }
+                liveTotal += completedBytes
                 
                 if isDownloading {
-                    let bytesDelta = currentTotal >= self.lastTotalBytesDownloaded
-                        ? Double(currentTotal - self.lastTotalBytesDownloaded)
+                    let bytesDelta = liveTotal >= self.lastTotalBytesDownloaded
+                        ? Double(liveTotal - self.lastTotalBytesDownloaded)
                         : 0.0
-                    let instantSpeed = bytesDelta / elapsed  // bytes per second
+                    let instantSpeed = bytesDelta / elapsed
                     
-                    // EMA: smoothedSpeed = α * newSample + (1 - α) * previousSmoothed
                     if self.emaSpeed == 0 && instantSpeed > 0 {
-                        // First non-zero sample — seed the EMA to avoid slow ramp-up
                         self.emaSpeed = instantSpeed
                     } else {
                         self.emaSpeed = self.emaSmoothingFactor * instantSpeed + (1.0 - self.emaSmoothingFactor) * self.emaSpeed
                     }
                     self.currentSpeedBytesPerSecond = Int64(self.emaSpeed)
                 } else {
-                    // Graceful decay: wind down smoothly instead of snapping to 0
                     self.emaSpeed *= 0.4
                     if self.emaSpeed < 1024 {
                         self.emaSpeed = 0
@@ -75,7 +79,7 @@ class DownloadManager: ObservableObject {
                     self.currentSpeedBytesPerSecond = Int64(self.emaSpeed)
                 }
                 
-                self.lastTotalBytesDownloaded = currentTotal
+                self.lastTotalBytesDownloaded = liveTotal
             }
         }
     }

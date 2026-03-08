@@ -11,6 +11,9 @@ class ChunkDownloader {
     private let taskLock = NSLock()
     private var lastProgressUpdateTime: Date = Date()
     
+    /// Atomic byte counter readable by the speed timer — updated on every chunk write, not throttled.
+    private(set) var currentBytesRead: UInt64 = 0
+    
     init(task: DownloadTaskModel, onProgress: @escaping (DownloadTaskModel) -> Void) {
         self.task = task
         self.onProgress = onProgress
@@ -167,6 +170,9 @@ class ChunkDownloader {
             
             currentOffset += UInt64(data.count)
             let downloaded = currentOffset - chunk.startOffset
+            
+            // Update atomic counter immediately for speed measurement
+            self.currentBytesRead = self.task.downloadedBytes + downloaded
             
             let now = Date()
             taskLock.lock()

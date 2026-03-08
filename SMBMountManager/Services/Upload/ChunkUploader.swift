@@ -11,6 +11,9 @@ class ChunkUploader {
     private let taskLock = NSLock()
     private var lastProgressUpdateTime: Date = Date()
     
+    /// Atomic byte counter readable by the speed timer — updated on every chunk write, not throttled.
+    private(set) var currentBytesWritten: UInt64 = 0
+    
     init(task: UploadTaskModel, onProgress: @escaping (UploadTaskModel) -> Void) {
         self.task = task
         self.onProgress = onProgress
@@ -140,6 +143,9 @@ class ChunkUploader {
             // Write to SMB mount
             try writeHandle.write(contentsOf: data)
             currentOffset += UInt64(data.count)
+            
+            // Update atomic counter immediately (not throttled) for speed measurement
+            self.currentBytesWritten = currentOffset
             
             let now = Date()
             taskLock.lock()
