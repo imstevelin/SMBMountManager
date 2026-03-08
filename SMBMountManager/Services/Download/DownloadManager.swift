@@ -99,6 +99,13 @@ class DownloadManager: ObservableObject {
         
         if !hasActive {
             if !activeSessionTaskIDs.isEmpty {
+                // All session tasks just finished — send a single completion notification
+                let completedInSession = tasks.filter { activeSessionTaskIDs.contains($0.id) && $0.state == .completed }
+                if !completedInSession.isEmpty {
+                    // Use the first file name as the representative root name
+                    let rootName = completedInSession.first?.fileName ?? "檔案"
+                    NotificationService.sendDownloadCompleted(rootName: rootName, fileCount: completedInSession.count)
+                }
                 activeSessionTaskIDs.removeAll()
             }
         } else {

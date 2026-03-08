@@ -273,6 +273,7 @@ struct MenuBarLabel: View {
                                     
                                     await MainActor.run {
                                         DownloadManager.shared.addTasks(batch: batchTasks)
+                                        NotificationService.sendDownloadStarted(rootName: url.lastPathComponent, fileCount: batchTasks.count)
                                         print("[Services] Started folder download for \(url.lastPathComponent) to \(targetFolderURL.path) with \(batchTasks.count) items")
                                     }
                                 }
@@ -300,6 +301,7 @@ struct MenuBarLabel: View {
                                             destinationURL: destinationURL,
                                             totalBytes: size
                                         )
+                                        NotificationService.sendDownloadStarted(rootName: url.lastPathComponent, fileCount: 1)
                                         print("[Services] Started download for \(url.lastPathComponent) to \(destinationURL.path)")
                                     }
                                 }
@@ -391,6 +393,10 @@ struct MenuBarLabel: View {
                      
                      await MainActor.run {
                          UploadManager.shared.addTasks(batch: batchTasks)
+                         // Send a single notification for the entire batch
+                         let rootNames = urls.map { $0.lastPathComponent }
+                         let displayName = rootNames.count == 1 ? rootNames[0] : rootNames[0]
+                         NotificationService.sendUploadStarted(rootName: displayName, fileCount: batchTasks.count)
                      }
                  }
             }

@@ -99,6 +99,12 @@ class UploadManager: ObservableObject {
         
         if !hasActive {
             if !activeSessionTaskIDs.isEmpty {
+                // All session tasks just finished — send a single completion notification
+                let completedInSession = tasks.filter { activeSessionTaskIDs.contains($0.id) && $0.state == .completed }
+                if !completedInSession.isEmpty {
+                    let rootName = completedInSession.first?.sourceURL.lastPathComponent ?? "檔案"
+                    NotificationService.sendUploadCompleted(rootName: rootName, fileCount: completedInSession.count)
+                }
                 activeSessionTaskIDs.removeAll()
             }
         } else {

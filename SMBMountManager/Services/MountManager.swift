@@ -203,10 +203,10 @@ class MountManager: ObservableObject {
                             // Check for notifications on strictly serial source of truth
                             if let realOld = self.statuses[name] {
                                 if !realOld.isMounted && finalStatus.isMounted {
-                                    NotificationService.sendMountConnected(name: name)
+                                    NotificationService.queueMountConnected(name: name)
                                     NotificationService.clearNotifications(for: name)
                                 } else if realOld.isMounted && !finalStatus.isMounted && !self.isPaused && !self.pausedMounts.contains(name) && !self.networkPausedMounts.contains(name) {
-                                    NotificationService.sendMountDisconnected(name: name)
+                                    NotificationService.queueMountDisconnected(name: name)
                                 }
                             }
                             
@@ -218,6 +218,8 @@ class MountManager: ObservableObject {
             }
             
             await MainActor.run {
+            // Flush coalesced mount notifications as a single batch
+            NotificationService.flushMountEvents()
                 
                 // Self-healing explicitly guarded on MainActor to avoid repetitive overlaps
                 for mount in currentMounts {
@@ -457,8 +459,8 @@ class MountManager: ObservableObject {
                                         let _ = self.restartEngine(name: mount.name)
                                         self.consecutiveFailures[mount.name] = 0
 
-                                        // Send notification
-                                        NotificationService.sendMountStale(name: mount.name)
+                                        // Queue stale notification (will be flushed at end of health monitor cycle)
+                                        NotificationService.queueMountStale(name: mount.name)
                                     }
                                 }
                             }
@@ -466,8 +468,11 @@ class MountManager: ObservableObject {
                     }
                 }
             }
-            // Trigger UI update
-            await MainActor.run { self.refreshStatuses() }
+            // Trigger UI update + flush any stale notifications
+            await MainActor.run {
+                NotificationService.flushMountEvents()
+                self.refreshStatuses()
+            }
         }
     }
 
