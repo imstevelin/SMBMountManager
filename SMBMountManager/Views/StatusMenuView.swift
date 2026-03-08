@@ -42,14 +42,14 @@ struct StatusMenuView: View {
         Divider()
 
         Menu {
-            let activeTasksCount = DownloadManager.shared.tasks.filter { $0.state == .downloading || $0.state == .waiting || $0.state == .paused }.count
+            let allTasks = DownloadManager.shared.tasks
+            let activeTasksCount = allTasks.filter { $0.state == .downloading || $0.state == .waiting || $0.state == .paused }.count
             
             Text("序列中: \(activeTasksCount)")
                 .font(.callout)
             
-            let activeTasks = DownloadManager.shared.tasks.filter { $0.state == .downloading || $0.state == .waiting || $0.state == .paused }
-            let totalBytes = activeTasks.reduce(0) { $0 + $1.totalBytes }
-            let downloadedBytes = activeTasks.reduce(0) { $0 + $1.downloadedBytes }
+            let totalBytes = allTasks.reduce(0) { $0 + $1.totalBytes }
+            let downloadedBytes = allTasks.reduce(0) { $0 + ($1.state == .completed ? $1.totalBytes : $1.downloadedBytes) }
             let progress = totalBytes > 0 ? (Double(downloadedBytes) / Double(totalBytes)) * 100 : 0
             
             Text("下載進度: \(Int(progress))%")
@@ -106,14 +106,14 @@ struct StatusMenuView: View {
         }
 
         Menu {
-            let activeTasksCount = UploadManager.shared.tasks.filter { $0.state == .uploading || $0.state == .waiting || $0.state == .paused }.count
+            let allTasks = UploadManager.shared.tasks
+            let activeTasksCount = allTasks.filter { $0.state == .uploading || $0.state == .waiting || $0.state == .paused }.count
             
             Text("序列中: \(activeTasksCount)")
                 .font(.callout)
             
-            let activeTasks = UploadManager.shared.tasks.filter { $0.state == .uploading || $0.state == .waiting || $0.state == .paused }
-            let totalBytes = activeTasks.reduce(0) { $0 + $1.totalBytes }
-            let uploadedBytes = activeTasks.reduce(0) { $0 + $1.uploadedBytes }
+            let totalBytes = allTasks.reduce(0) { $0 + $1.totalBytes }
+            let uploadedBytes = allTasks.reduce(0) { $0 + ($1.state == .completed ? $1.totalBytes : $1.uploadedBytes) }
             let progress = totalBytes > 0 ? (Double(uploadedBytes) / Double(totalBytes)) * 100 : 0
             
             Text("上傳進度: \(Int(progress))%")

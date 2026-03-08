@@ -69,11 +69,13 @@ struct MenuBarLabel: View {
 
     var body: some View {
         HStack(spacing: 3) {
-            let activeDLTasks = downloadManager.tasks.filter { $0.state == .downloading || $0.state == .waiting || $0.state == .paused }
-            let activeULTasks = uploadManager.tasks.filter { $0.state == .uploading || $0.state == .waiting || $0.state == .paused }
+            let allDLTasks = downloadManager.tasks
+            let activeDLTasks = allDLTasks.filter { $0.state == .downloading || $0.state == .waiting || $0.state == .paused }
+            let allULTasks = uploadManager.tasks
+            let activeULTasks = allULTasks.filter { $0.state == .uploading || $0.state == .waiting || $0.state == .paused }
             
-            let isDownloading = downloadManager.tasks.contains { $0.state == .downloading }
-            let isUploading = uploadManager.tasks.contains { $0.state == .uploading }
+            let isDownloading = allDLTasks.contains { $0.state == .downloading }
+            let isUploading = allULTasks.contains { $0.state == .uploading }
             
             let isDlPaused = !isDownloading && activeDLTasks.contains { $0.state == .paused }
             let isUlPaused = !isUploading && activeULTasks.contains { $0.state == .paused }
@@ -81,25 +83,35 @@ struct MenuBarLabel: View {
             let hasActiveTasks = !activeDLTasks.isEmpty || !activeULTasks.isEmpty
             
             if !activeDLTasks.isEmpty {
-                let totalBytes = activeDLTasks.reduce(0) { $0 + $1.totalBytes }
-                let downloadedBytes = activeDLTasks.reduce(0) { $0 + $1.downloadedBytes }
+                let totalBytes = allDLTasks.reduce(0) { $0 + $1.totalBytes }
+                let downloadedBytes = allDLTasks.reduce(0) { $0 + ($1.state == .completed ? $1.totalBytes : $1.downloadedBytes) }
                 let progress = totalBytes > 0 ? (CGFloat(downloadedBytes) / CGFloat(totalBytes)) : 0.0
                 
                 Image(nsImage: .downloadProgressRing(progress: progress, isPaused: isDlPaused))
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(height: 14)
+                
+                if isDownloading {
+                    Text("\(Int(progress * 100))%")
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                }
             }
             
             if !activeULTasks.isEmpty {
-                let totalBytes = activeULTasks.reduce(0) { $0 + $1.totalBytes }
-                let uploadedBytes = activeULTasks.reduce(0) { $0 + $1.uploadedBytes }
+                let totalBytes = allULTasks.reduce(0) { $0 + $1.totalBytes }
+                let uploadedBytes = allULTasks.reduce(0) { $0 + ($1.state == .completed ? $1.totalBytes : $1.uploadedBytes) }
                 let progress = totalBytes > 0 ? (CGFloat(uploadedBytes) / CGFloat(totalBytes)) : 0.0
                 
                 Image(nsImage: .downloadProgressRing(progress: progress, isPaused: isUlPaused))
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(height: 14)
+                
+                if isUploading {
+                    Text("\(Int(progress * 100))%")
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                }
             }
             
             if !hasActiveTasks {
@@ -277,39 +289,45 @@ struct MenuBarLabel: View {
                      return
                  }
                  
-                 var batchTasks: [(sourceURL: URL, mountId: String, relativeSMBPath: String)] = []
-                 
-                 for localURL in urls {
-                     var isDirectory: ObjCBool = false
-                     guard FileManager.default.fileExists(atPath: localURL.path, isDirectory: &isDirectory) else { continue }
+                 // Use detached task to avoid blocking the Main Thread 
+                 // when iterating through potentially thousands of files recursively.
+                 Task.detached {
+                     var batchTasks: [(sourceURL: URL, mountId: String, relativeSMBPath: String)] = []
                      
-                     if isDirectory.boolValue {
-                         if let enumerator = FileManager.default.enumerator(at: localURL, includingPropertiesForKeys: [.isRegularFileKey]) {
-                             for case let fileURL as URL in enumerator {
-                                 do {
-                                     let resourceValues = try fileURL.resourceValues(forKeys: [.isRegularFileKey])
-                                     if resourceValues.isRegularFile == true {
-                                         let relativePathToFile = fileURL.path.replacingOccurrences(of: localURL.path + "/", with: "")
-                                         let targetFolderURL = destinationURL.appendingPathComponent(localURL.lastPathComponent)
-                                         let specificDestURL = targetFolderURL.appendingPathComponent(relativePathToFile)
-                                         
-                                         var relativeSMBPath = String(specificDestURL.path.dropFirst(mount.mountPath.count))
-                                         if relativeSMBPath.hasPrefix("/") { relativeSMBPath.removeFirst() }
-                                         
-                                         batchTasks.append((sourceURL: fileURL, mountId: mount.id, relativeSMBPath: relativeSMBPath))
-                                     }
-                                 } catch {}
+                     for localURL in urls {
+                         var isDirectory: ObjCBool = false
+                         guard FileManager.default.fileExists(atPath: localURL.path, isDirectory: &isDirectory) else { continue }
+                         
+                         if isDirectory.boolValue {
+                             if let enumerator = FileManager.default.enumerator(at: localURL, includingPropertiesForKeys: [.isRegularFileKey]) {
+                                 for case let fileURL as URL in enumerator {
+                                     do {
+                                         let resourceValues = try fileURL.resourceValues(forKeys: [.isRegularFileKey])
+                                         if resourceValues.isRegularFile == true {
+                                             let relativePathToFile = fileURL.path.replacingOccurrences(of: localURL.path + "/", with: "")
+                                             let targetFolderURL = destinationURL.appendingPathComponent(localURL.lastPathComponent)
+                                             let specificDestURL = targetFolderURL.appendingPathComponent(relativePathToFile)
+                                             
+                                             var relativeSMBPath = String(specificDestURL.path.dropFirst(mount.mountPath.count))
+                                             if relativeSMBPath.hasPrefix("/") { relativeSMBPath.removeFirst() }
+                                             
+                                             batchTasks.append((sourceURL: fileURL, mountId: mount.id, relativeSMBPath: relativeSMBPath))
+                                         }
+                                     } catch {}
+                                 }
                              }
+                         } else {
+                             let specificDestURL = destinationURL.appendingPathComponent(localURL.lastPathComponent)
+                             var relativeSMBPath = String(specificDestURL.path.dropFirst(mount.mountPath.count))
+                             if relativeSMBPath.hasPrefix("/") { relativeSMBPath.removeFirst() }
+                             batchTasks.append((sourceURL: localURL, mountId: mount.id, relativeSMBPath: relativeSMBPath))
                          }
-                     } else {
-                         let specificDestURL = destinationURL.appendingPathComponent(localURL.lastPathComponent)
-                         var relativeSMBPath = String(specificDestURL.path.dropFirst(mount.mountPath.count))
-                         if relativeSMBPath.hasPrefix("/") { relativeSMBPath.removeFirst() }
-                         batchTasks.append((sourceURL: localURL, mountId: mount.id, relativeSMBPath: relativeSMBPath))
+                     }
+                     
+                     await MainActor.run {
+                         UploadManager.shared.addTasks(batch: batchTasks)
                      }
                  }
-                 
-                 UploadManager.shared.addTasks(batch: batchTasks)
             }
         }
     }

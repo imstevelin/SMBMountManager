@@ -10,7 +10,8 @@ class UploadManager: ObservableObject {
     private let storageURL: URL
     private let queue = DispatchQueue(label: "org.imstevelin.UploadManager", attributes: .concurrent)
     
-    private let maxConcurrentTasks = 2 // SMB write concurrency should be lower than read to avoid directory locking
+    // Limits concurrent SMB writes to 1 to prevent NAS storage locks and connection unresponsiveness
+    private let maxConcurrentTasks = 1
     private var uploaders: [UUID: ChunkUploader] = [:]
     
     // Upload speed tracking
@@ -89,30 +90,34 @@ class UploadManager: ObservableObject {
     }
     
     func addTasks(batch: [(sourceURL: URL, mountId: String, relativeSMBPath: String)]) {
-        var newTasks: [UploadTaskModel] = []
-        for item in batch {
-            // Read local file size and date
-            if let attributes = try? FileManager.default.attributesOfItem(atPath: item.sourceURL.path),
-               let size = attributes[.size] as? UInt64 {
-                let modDate = attributes[.modificationDate] as? Date
-                
-                let task = UploadTaskModel(
-                    sourceURL: item.sourceURL,
-                    mountId: item.mountId,
-                    relativeSMBPath: item.relativeSMBPath,
-                    totalBytes: size,
-                    lastModificationDate: modDate
-                )
-                newTasks.append(task)
+        Task.detached {
+            var newTasks: [UploadTaskModel] = []
+            for item in batch {
+                // Read local file size and date
+                if let attributes = try? FileManager.default.attributesOfItem(atPath: item.sourceURL.path),
+                   let size = attributes[.size] as? UInt64 {
+                    let modDate = attributes[.modificationDate] as? Date
+                    
+                    let task = UploadTaskModel(
+                        sourceURL: item.sourceURL,
+                        mountId: item.mountId,
+                        relativeSMBPath: item.relativeSMBPath,
+                        totalBytes: size,
+                        lastModificationDate: modDate
+                    )
+                    newTasks.append(task)
+                }
             }
-        }
-        
-        if !newTasks.isEmpty {
-            self.tasks.append(contentsOf: newTasks)
-            self.saveTasks()
             
-            for task in newTasks {
-                processNextTasks()
+            await MainActor.run {
+                if !newTasks.isEmpty {
+                    self.tasks.append(contentsOf: newTasks)
+                    self.saveTasks()
+                    
+                    for _ in newTasks {
+                        self.processNextTasks()
+                    }
+                }
             }
         }
     }
