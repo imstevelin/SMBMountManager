@@ -70,55 +70,49 @@ struct MenuBarLabel: View {
     var body: some View {
         HStack(spacing: 3) {
             let allDLTasks = downloadManager.tasks
-            let activeDLTasks = allDLTasks.filter { $0.state == .downloading || $0.state == .waiting || $0.state == .paused }
+            let sessionDLTasks = allDLTasks.filter { downloadManager.activeSessionTaskIDs.contains($0.id) }
+            
             let allULTasks = uploadManager.tasks
-            let activeULTasks = allULTasks.filter { $0.state == .uploading || $0.state == .waiting || $0.state == .paused }
+            let sessionULTasks = allULTasks.filter { uploadManager.activeSessionTaskIDs.contains($0.id) }
             
             let isDownloading = allDLTasks.contains { $0.state == .downloading }
             let isUploading = allULTasks.contains { $0.state == .uploading }
+            let isActive = isDownloading || isUploading
             
-            let isDlPaused = !isDownloading && activeDLTasks.contains { $0.state == .paused }
-            let isUlPaused = !isUploading && activeULTasks.contains { $0.state == .paused }
+            let isDlPaused = !isDownloading && sessionDLTasks.contains { $0.state == .paused }
+            let isUlPaused = !isUploading && sessionULTasks.contains { $0.state == .paused }
+            let isPaused = !isActive && (isDlPaused || isUlPaused)
             
-            let hasActiveTasks = !activeDLTasks.isEmpty || !activeULTasks.isEmpty
+            let hasSessionTasks = !sessionDLTasks.isEmpty || !sessionULTasks.isEmpty
             
-            if !activeDLTasks.isEmpty {
-                let totalBytes = allDLTasks.reduce(0) { $0 + $1.totalBytes }
-                let downloadedBytes = allDLTasks.reduce(0) { $0 + ($1.state == .completed ? $1.totalBytes : $1.downloadedBytes) }
-                let progress = totalBytes > 0 ? (CGFloat(downloadedBytes) / CGFloat(totalBytes)) : 0.0
+            if hasSessionTasks {
+                let dlTotal = sessionDLTasks.reduce(UInt64(0)) { $0 + $1.totalBytes }
+                let dlDone = sessionDLTasks.reduce(UInt64(0)) { $0 + ($1.state == .completed ? $1.totalBytes : $1.downloadedBytes) }
                 
-                Image(nsImage: .downloadProgressRing(progress: progress, isPaused: isDlPaused))
+                let ulTotal = sessionULTasks.reduce(UInt64(0)) { $0 + $1.totalBytes }
+                let ulDone = sessionULTasks.reduce(UInt64(0)) { $0 + ($1.state == .completed ? $1.totalBytes : $1.uploadedBytes) }
+                
+                let totalBytes = dlTotal + ulTotal
+                let totalDone = dlDone + ulDone
+                
+                let progress = totalBytes > 0 ? (CGFloat(totalDone) / CGFloat(totalBytes)) : 0.0
+                
+                Image(nsImage: .downloadProgressRing(progress: progress, isPaused: isPaused))
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(height: 14)
                 
-                if isDownloading {
+                if isActive {
                     Text("\(Int(progress * 100))%")
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
                 }
             }
             
-            if !activeULTasks.isEmpty {
-                let totalBytes = allULTasks.reduce(0) { $0 + $1.totalBytes }
-                let uploadedBytes = allULTasks.reduce(0) { $0 + ($1.state == .completed ? $1.totalBytes : $1.uploadedBytes) }
-                let progress = totalBytes > 0 ? (CGFloat(uploadedBytes) / CGFloat(totalBytes)) : 0.0
-                
-                Image(nsImage: .downloadProgressRing(progress: progress, isPaused: isUlPaused))
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(height: 14)
-                
-                if isUploading {
-                    Text("\(Int(progress * 100))%")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                }
-            }
-            
-            if !hasActiveTasks {
+            if !hasSessionTasks {
                 Image(systemName: mountManager.overallStatusIcon)
             }
             
-            if settings.showMountCount && !mountManager.mounts.isEmpty && !hasActiveTasks {
+            if settings.showMountCount && !mountManager.mounts.isEmpty && !hasSessionTasks {
                 let connected = mountManager.statuses.values.filter { $0.isMounted && $0.isResponsive }.count
                 let total = mountManager.mounts.count
                 Text("\(connected)/\(total)")

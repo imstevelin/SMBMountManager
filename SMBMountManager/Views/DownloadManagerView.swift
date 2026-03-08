@@ -129,7 +129,7 @@ struct DownloadManagerView: View {
                     .symbolEffect(.pulse, options: .repeating)
             }
 
-            Text(selectedTab == .active ? "目前沒有處理中的任務" : "目前沒有已完成的任務")
+            Text(selectedTab == .active ? "目前沒有處理中的下載任務" : "目前沒有已完成的下載任務")
                 .font(.title3)
                 .foregroundStyle(.secondary)
             Text(selectedTab == .active ? "透過 Finder 右鍵選單「SMB 專用下載」即可開始下載" : "已完成的下載任務會出現在這裡")

@@ -22,6 +22,9 @@ class UploadManager: ObservableObject {
     private let maxRecentSpeeds = 3
     private var lastCalculatedSpeed: Int64 = 0
     
+    /// Tracks the tasks involved in the current active upload session to prevent progress percentage jumps.
+    @Published var activeSessionTaskIDs: Set<UUID> = []
+    
     private init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let managerDir = appSupport.appendingPathComponent("SMBMountManager/Uploads")
@@ -82,9 +85,25 @@ class UploadManager: ObservableObject {
     }
     
     func saveTasks() {
+        updateSession()
         Task { @MainActor in
             if let data = try? JSONEncoder().encode(tasks) {
                 try? data.write(to: storageURL, options: .atomic)
+            }
+        }
+    }
+    
+    private func updateSession() {
+        let activeStates: [UploadState] = [.uploading, .waiting, .paused]
+        let hasActive = tasks.contains { activeStates.contains($0.state) }
+        
+        if !hasActive {
+            if !activeSessionTaskIDs.isEmpty {
+                activeSessionTaskIDs.removeAll()
+            }
+        } else {
+            for task in tasks where activeStates.contains(task.state) && !activeSessionTaskIDs.contains(task.id) {
+                activeSessionTaskIDs.insert(task.id)
             }
         }
     }

@@ -134,7 +134,7 @@ struct UploadManagerView: View {
             Text(selectedTab == .active ? "目前沒有處理中的上傳任務" : "目前沒有已完成的上傳任務")
                 .font(.title3)
                 .foregroundStyle(.secondary)
-            Text(selectedTab == .active ? "透過 Finder 右鍵選單「上傳至 SMB」即可開始上傳" : "已完成的上傳任務會出現在這裡")
+            Text(selectedTab == .active ? "透過 Finder 右鍵選單「SMB 專用上傳」即可開始上傳" : "已完成的上傳任務會出現在這裡")
                 .font(.callout)
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
