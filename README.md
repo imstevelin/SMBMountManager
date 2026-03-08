@@ -2,12 +2,12 @@
 
 ![macOS 14.0+](https://img.shields.io/badge/macOS-14.0%2B-blue.svg)
 ![Swift 5](https://img.shields.io/badge/Swift-5.0-orange.svg)
-![Release 1.3.0](https://img.shields.io/badge/Release-1.3.0-brightgreen.svg)
+![Release 1.3.1](https://img.shields.io/badge/Release-1.3.1-brightgreen.svg)
 ![License MIT](https://img.shields.io/badge/License-MIT-green.svg)
 
-> **SMB 掛載管理器** 是一個專為 macOS 設計的強大開源常駐選單列工具。經過連續的版本迭代，全新的 **v1.3.0 版本** 帶來了革命性的 **斷點續傳上傳與下載雙向引擎**、**單調遞增防護的全局進度環**、深度整合 macOS 的 **Finder 專屬右鍵傳輸擴充套件**，以 Apple Liquid Glass UI 的絕美姿態，讓您的 NAS 傳輸效率與視覺享受達到前所未有的高度。
+> **SMB 掛載管理器** 是一個專為 macOS 設計的強大開源常駐選單列工具。經過連續的版本迭代，全新的 **v1.3.1 版本** 帶來了革命性的 **斷點續傳上傳與下載雙向引擎**、**單調遞增防護的全局進度環**、深度整合 macOS 的 **Finder 專屬右鍵傳輸擴充套件**，以 Apple Liquid Glass UI 的絕美姿態，讓您的 NAS 傳輸效率與視覺享受達到前所未有的高度。
 
-## 🌟 核心特色 (v1.3.0 全新雙向傳輸引擎)
+## 🌟 核心特色 (v1.3.1 全新雙向傳輸引擎)
 
 - **⚡ 雙向斷點續傳與 Finder 深度整合**：
   - **右鍵一鍵傳輸**：選取路徑後，透過滑鼠右鍵「快速動作」選單即可直接呼叫「**SMB 專用下載**」或「**SMB 專用上傳**」，無縫發起多線程傳輸任務。
@@ -29,7 +29,7 @@
 
 ### 從 Release 下載安裝 (推薦)
 1. 前往本專案的 [Releases](https://github.com/imstevelin/smbmountmanager/releases) 頁面。
-2. 下載最新的 `SMB掛載管理器.zip` (v1.3.0)。
+2. 下載最新的 `SMB掛載管理器.zip` (v1.3.1)。
 3. 解壓縮後將 `SMB掛載管理器.app` 拖曳至您的「應用程式 (Applications)」資料夾。
 4. **推薦動作**：首次開啟時，進入「設定」> 點擊「安裝權限修復服務」，以獲得針對 `/Volumes` 資料夾的最高穩定性與權限修復。
 
