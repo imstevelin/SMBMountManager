@@ -160,6 +160,7 @@ actor MountEngine {
                     
                     await MainActor.run {
                         DownloadManager.shared.resumeTasks(forMountId: mount.id)
+                        UploadManager.shared.resumeTasksForMount(mountId: mount.id)
                     }
                     break
                 }
@@ -173,6 +174,7 @@ actor MountEngine {
                     
                     await MainActor.run {
                         DownloadManager.shared.resumeTasks(forMountId: mount.id)
+                        UploadManager.shared.resumeTasksForMount(mountId: mount.id)
                     }
                     break
                 }

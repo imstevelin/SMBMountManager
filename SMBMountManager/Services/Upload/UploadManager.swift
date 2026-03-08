@@ -13,14 +13,15 @@ class UploadManager: ObservableObject {
     // Limits concurrent SMB writes to 1 to prevent NAS storage locks and connection unresponsiveness
     private let maxConcurrentTasks = 1
     private var uploaders: [UUID: ChunkUploader] = [:]
+    private var isPausingAll: Bool = false
     
-    // Upload speed tracking
+    // Upload speed tracking — Exponential Moving Average (EMA) for smooth display
     @Published var currentSpeedBytesPerSecond: Int64 = 0
-    private var lastTotalBytesUploaded: Int64 = 0
+    private var lastTotalBytesUploaded: UInt64 = 0
     private var speedTimer: Timer?
-    private var recentSpeeds: [Int64] = []
-    private let maxRecentSpeeds = 3
-    private var lastCalculatedSpeed: Int64 = 0
+    private var emaSpeed: Double = 0.0
+    private let emaSmoothingFactor: Double = 0.3  // α: higher = more responsive, lower = smoother
+    private var lastSpeedSampleTime: Date = Date()
     
     /// Tracks the tasks involved in the current active upload session to prevent progress percentage jumps.
     @Published var activeSessionTaskIDs: Set<UUID> = []
@@ -37,32 +38,41 @@ class UploadManager: ObservableObject {
     
     private func startSpeedMeasurement() {
         speedTimer?.invalidate()
-        speedTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+        lastSpeedSampleTime = Date()
+        lastTotalBytesUploaded = tasks.reduce(UInt64(0)) { $0 + $1.uploadedBytes }
+        
+        speedTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self = self else { return }
+                let now = Date()
+                let elapsed = now.timeIntervalSince(self.lastSpeedSampleTime)
+                guard elapsed > 0.1 else { return }
+                self.lastSpeedSampleTime = now
+                
                 let currentTotal = self.tasks.reduce(UInt64(0)) { $0 + $1.uploadedBytes }
-                
-                var instantaneousSpeed: Int64 = 0
-                if currentTotal >= UInt64(max(0, self.lastTotalBytesUploaded)) {
-                    let diff = currentTotal - UInt64(max(0, self.lastTotalBytesUploaded))
-                    instantaneousSpeed = Int64(diff)
-                }
-                self.lastTotalBytesUploaded = Int64(currentTotal)
-                
-                let isUploading = !self.tasks.filter { $0.state == .uploading }.isEmpty
+                let isUploading = self.tasks.contains { $0.state == .uploading }
                 
                 if isUploading {
-                    self.recentSpeeds.append(instantaneousSpeed)
-                    if self.recentSpeeds.count > self.maxRecentSpeeds {
-                        self.recentSpeeds.removeFirst()
+                    let bytesDelta = currentTotal >= self.lastTotalBytesUploaded
+                        ? Double(currentTotal - self.lastTotalBytesUploaded)
+                        : 0.0
+                    let instantSpeed = bytesDelta / elapsed
+                    
+                    if self.emaSpeed == 0 && instantSpeed > 0 {
+                        self.emaSpeed = instantSpeed
+                    } else {
+                        self.emaSpeed = self.emaSmoothingFactor * instantSpeed + (1.0 - self.emaSmoothingFactor) * self.emaSpeed
                     }
-                    let avgSpeed = self.recentSpeeds.reduce(0, +) / Int64(self.recentSpeeds.count)
-                    self.lastCalculatedSpeed = avgSpeed
-                    self.currentSpeedBytesPerSecond = self.lastCalculatedSpeed
+                    self.currentSpeedBytesPerSecond = Int64(self.emaSpeed)
                 } else {
-                    self.recentSpeeds.removeAll()
-                    self.currentSpeedBytesPerSecond = 0
+                    self.emaSpeed *= 0.4
+                    if self.emaSpeed < 1024 {
+                        self.emaSpeed = 0
+                    }
+                    self.currentSpeedBytesPerSecond = Int64(self.emaSpeed)
                 }
+                
+                self.lastTotalBytesUploaded = currentTotal
             }
         }
     }
@@ -99,6 +109,12 @@ class UploadManager: ObservableObject {
         
         if !hasActive {
             if !activeSessionTaskIDs.isEmpty {
+                // All session tasks just finished — send a single completion notification
+                let completedInSession = tasks.filter { activeSessionTaskIDs.contains($0.id) && $0.state == .completed }
+                if !completedInSession.isEmpty {
+                    let rootName = completedInSession.first?.sourceURL.lastPathComponent ?? "檔案"
+                    NotificationService.sendUploadCompleted(rootName: rootName, fileCount: completedInSession.count)
+                }
                 activeSessionTaskIDs.removeAll()
             }
         } else {
@@ -156,6 +172,7 @@ class UploadManager: ObservableObject {
     }
     
     func pauseAll() {
+        isPausingAll = true
         let taskIdsToPause = tasks.filter { $0.state == .uploading || $0.state == .waiting }.map { $0.id }
         
         for index in tasks.indices {
@@ -165,13 +182,19 @@ class UploadManager: ObservableObject {
         }
         self.saveTasks()
         
-        for id in taskIdsToPause {
-            if let uploader = uploaders[id] {
-                Task { await uploader.pause() }
+        Task {
+            await withTaskGroup(of: Void.self) { group in
+                for id in taskIdsToPause {
+                    if let uploader = self.uploaders[id] {
+                        group.addTask { await uploader.pause() }
+                    }
+                }
+            }
+            await MainActor.run {
+                self.isPausingAll = false
+                self.processNextTasks()
             }
         }
-        
-        processNextTasks()
     }
     
     func resumeTask(id: UUID) {
@@ -186,6 +209,28 @@ class UploadManager: ObservableObject {
     func resumeAll() {
         var changed = false
         for index in tasks.indices {
+            if tasks[index].state == .paused || tasks[index].state == .error {
+                // Only resume if the mount point is actually mounted
+                if let mount = AppLifecycle.shared.mountManager?.mounts.first(where: { $0.id == tasks[index].mountId }) {
+                    guard ChunkUploader.isMountPathActuallyMounted(mount.mountPath) else {
+                        continue  // Skip — mount not ready
+                    }
+                }
+                tasks[index].state = .waiting
+                tasks[index].errorMessage = nil
+                changed = true
+            }
+        }
+        if changed {
+            saveTasks()
+            processNextTasks()
+        }
+    }
+    
+    /// Resume only tasks belonging to a specific mount point (called when a mount comes online).
+    func resumeTasksForMount(mountId: String) {
+        var changed = false
+        for index in tasks.indices where tasks[index].mountId == mountId {
             if tasks[index].state == .paused || tasks[index].state == .error {
                 tasks[index].state = .waiting
                 tasks[index].errorMessage = nil
@@ -203,10 +248,16 @@ class UploadManager: ObservableObject {
         
         if let idx = tasks.firstIndex(where: { $0.id == id }) {
             let task = tasks[idx]
+            
+            // Note: User requested to explicitly delete `.smbupload` when a task is cancelled.
+            if let mount = AppLifecycle.shared.mountManager?.mounts.first(where: { $0.id == task.mountId }) {
+                let destURL = URL(fileURLWithPath: mount.mountPath).appendingPathComponent(task.relativeSMBPath)
+                let uploadURL = destURL.appendingPathExtension("smbupload")
+                try? FileManager.default.removeItem(at: uploadURL)
+            }
+            
             tasks.remove(at: idx)
             saveTasks()
-            
-            // Note: we don't automatically delete the interrupted `.smbupload` file on the NAS to allow for manual recovery.
         }
         processNextTasks()
     }
@@ -225,6 +276,13 @@ class UploadManager: ObservableObject {
             }
             
             await MainActor.run {
+                for task in self.tasks where activeTaskIds.contains(task.id) {
+                    if let mount = AppLifecycle.shared.mountManager?.mounts.first(where: { $0.id == task.mountId }) {
+                        let destURL = URL(fileURLWithPath: mount.mountPath).appendingPathComponent(task.relativeSMBPath)
+                        let uploadURL = destURL.appendingPathExtension("smbupload")
+                        try? FileManager.default.removeItem(at: uploadURL)
+                    }
+                }
                 self.tasks.removeAll { activeTaskIds.contains($0.id) }
                 self.saveTasks()
                 self.processNextTasks()
@@ -249,6 +307,7 @@ class UploadManager: ObservableObject {
     }
     
     private func processNextTasks() {
+        guard !isPausingAll else { return }
         let uploadingCount = tasks.filter { $0.state == .uploading }.count
         let availableSlots = maxConcurrentTasks - uploadingCount
         
@@ -263,33 +322,82 @@ class UploadManager: ObservableObject {
     }
     
     private func startUploading(task: UploadTaskModel) {
+        // Pre-flight check: verify the mount point is actually mounted before starting
+        if let mount = AppLifecycle.shared.mountManager?.mounts.first(where: { $0.id == task.mountId }) {
+            guard ChunkUploader.isMountPathActuallyMounted(mount.mountPath) else {
+                // Mount is not ready — keep task in waiting state so it can be retried later
+                AppLogger.shared.info("[UploadManager] Mount \(mount.name) not ready, deferring task \(task.sourceURL.lastPathComponent)")
+                if let index = tasks.firstIndex(where: { $0.id == task.id }) {
+                    tasks[index].state = .paused
+                    tasks[index].errorMessage = "掛載點尚未就緒，請在掛載完成後手動繼續。"
+                    saveTasks()
+                }
+                return
+            }
+        }
+        
         if let index = tasks.firstIndex(where: { $0.id == task.id }) {
             tasks[index].state = .uploading
         }
         
-        let uploader = ChunkUploader(task: task) { [weak self] updatedTask in
-            guard let self = self else { return }
-            
-            Task { @MainActor in
-                if let index = self.tasks.firstIndex(where: { $0.id == updatedTask.id }) {
-                    self.tasks[index] = updatedTask
-                    
-                    if updatedTask.state == .completed || updatedTask.state == .error || updatedTask.state == .paused {
-                        self.uploaders.removeValue(forKey: updatedTask.id)
-                        self.saveTasks()
-                        self.processNextTasks()
-                        
-                        if updatedTask.state == .completed {
-                            NotificationCenter.default.post(name: NSNotification.Name("UploadTaskCompleted"), object: nil, userInfo: ["fileName": updatedTask.sourceURL.lastPathComponent])
-                        }
-                    }
-                }
+        guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
+        
+        // CRITICAL: Must pass tasks[index] which has the .uploading state,
+        // not the stale 'task' parameter which still has .waiting state!
+        let uploader = ChunkUploader(task: tasks[index]) { [weak self] updatedTask in
+            DispatchQueue.main.async {
+                self?.updateTask(updatedTask)
             }
         }
         
         uploaders[task.id] = uploader
-        Task {
+        Task.detached {
             await uploader.start()
+        }
+    }
+    
+    // MARK: - Update Loop
+    
+    private func updateTask(_ task: UploadTaskModel) {
+        guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
+        
+        let currentState = tasks[index].state
+        var updatedTask = task
+        
+        // Anti-bounce mechanism to prevent slow async packets from overwriting user UI intent
+        if (currentState == .paused || currentState == .completed || currentState == .error) && task.state == .uploading {
+            updatedTask.state = currentState
+        }
+        
+        // Retain totalBytes if we already have it
+        if updatedTask.totalBytes == 0 && tasks[index].totalBytes > 0 {
+            updatedTask.totalBytes = tasks[index].totalBytes
+        }
+        
+        tasks[index] = updatedTask
+        
+        let finalState = tasks[index].state
+        if finalState != currentState {
+            if finalState == .completed {
+                AppLogger.shared.info("[UploadManager] Completed task: \(tasks[index].sourceURL.lastPathComponent)")
+                NotificationCenter.default.post(name: NSNotification.Name("UploadTaskCompleted"), object: nil, userInfo: ["fileName": tasks[index].sourceURL.lastPathComponent])
+            } else if finalState == .error {
+                AppLogger.shared.error("[UploadManager] Task failed: \(tasks[index].sourceURL.lastPathComponent)")
+                // User requested to explicitly delete `.smbupload` upon failure.
+                if let mount = AppLifecycle.shared.mountManager?.mounts.first(where: { $0.id == tasks[index].mountId }) {
+                    let destURL = URL(fileURLWithPath: mount.mountPath).appendingPathComponent(tasks[index].relativeSMBPath)
+                    let uploadURL = destURL.appendingPathExtension("smbupload")
+                    try? FileManager.default.removeItem(at: uploadURL)
+                }
+            }
+        }
+        
+        if finalState == .completed || finalState == .error || finalState == .paused {
+            saveTasks()
+            if finalState == .completed || finalState == .error {
+                uploaders.removeValue(forKey: task.id)
+                processNextTasks()
+            }
         }
     }
 }

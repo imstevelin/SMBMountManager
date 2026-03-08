@@ -242,7 +242,7 @@ struct MenuBarLabel: View {
                                         for case let fileURL as URL in enumerator {
                                             do {
                                                 let resourceValues = try fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
-                                                if resourceValues.isRegularFile == true {
+                                                if resourceValues.isRegularFile == true && fileURL.lastPathComponent != ".DS_Store" {
                                                     let fileSize = UInt64(resourceValues.fileSize ?? 0)
                                                     // Extract relative path from base URL
                                                     let relativePathToFile = fileURL.path.replacingOccurrences(of: url.path + "/", with: "")
@@ -273,6 +273,7 @@ struct MenuBarLabel: View {
                                     
                                     await MainActor.run {
                                         DownloadManager.shared.addTasks(batch: batchTasks)
+                                        NotificationService.sendDownloadStarted(rootName: url.lastPathComponent, fileCount: batchTasks.count)
                                         print("[Services] Started folder download for \(url.lastPathComponent) to \(targetFolderURL.path) with \(batchTasks.count) items")
                                     }
                                 }
@@ -300,6 +301,7 @@ struct MenuBarLabel: View {
                                             destinationURL: destinationURL,
                                             totalBytes: size
                                         )
+                                        NotificationService.sendDownloadStarted(rootName: url.lastPathComponent, fileCount: 1)
                                         print("[Services] Started download for \(url.lastPathComponent) to \(destinationURL.path)")
                                     }
                                 }
@@ -368,7 +370,7 @@ struct MenuBarLabel: View {
                                  for case let fileURL as URL in enumerator {
                                      do {
                                          let resourceValues = try fileURL.resourceValues(forKeys: [.isRegularFileKey])
-                                         if resourceValues.isRegularFile == true {
+                                         if resourceValues.isRegularFile == true && fileURL.lastPathComponent != ".DS_Store" {
                                              let relativePathToFile = fileURL.path.replacingOccurrences(of: localURL.path + "/", with: "")
                                              let targetFolderURL = destinationURL.appendingPathComponent(localURL.lastPathComponent)
                                              let specificDestURL = targetFolderURL.appendingPathComponent(relativePathToFile)
@@ -391,6 +393,10 @@ struct MenuBarLabel: View {
                      
                      await MainActor.run {
                          UploadManager.shared.addTasks(batch: batchTasks)
+                         // Send a single notification for the entire batch
+                         let rootNames = urls.map { $0.lastPathComponent }
+                         let displayName = rootNames.count == 1 ? rootNames[0] : rootNames[0]
+                         NotificationService.sendUploadStarted(rootName: displayName, fileCount: batchTasks.count)
                      }
                  }
             }
@@ -436,7 +442,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         
         Task { @MainActor in
             DownloadManager.shared.startAll()
-            UploadManager.shared.resumeAll()
+            // Note: Upload tasks are NOT resumed here blindly.
+            // They will auto-resume per-mount when MountEngine confirms mounts are online.
         }
     }
 

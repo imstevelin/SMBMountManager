@@ -40,6 +40,14 @@ class ChunkUploader {
         let uploadURL = destURL.appendingPathExtension("smbupload")
         
         do {
+            // CRITICAL SAFETY CHECK: Verify the mount path is an actual mounted SMB volume,
+            // not a rogue local directory. We use statfs() to inspect the filesystem type.
+            // FileManager.fileExists is insufficient — it returns true for local rogue dirs too.
+            guard Self.isMountPathActuallyMounted(mount.mountPath) else {
+                fail(with: "掛載點尚未就緒（非有效掛載），為防止建立虛假路徑，已中止上傳。")
+                return
+            }
+            
             // Check local file access and size
             if !FileManager.default.fileExists(atPath: localSourceURL.path) {
                 fail(with: "本機來源檔案不存在")
@@ -69,6 +77,11 @@ class ChunkUploader {
                 // If the target completely doesn't exist, create an empty file
                 let parentDir = uploadURL.deletingLastPathComponent()
                 if !FileManager.default.fileExists(atPath: parentDir.path) {
+                    // Double-check mount is still alive before creating directories
+                    guard Self.isMountPathActuallyMounted(mount.mountPath) else {
+                        fail(with: "掛載點在傳輸準備期間斷開，為防止建立虛假路徑，已中止上傳。")
+                        return
+                    }
                     try FileManager.default.createDirectory(at: parentDir, withIntermediateDirectories: true)
                 }
                 FileManager.default.createFile(atPath: uploadURL.path, contents: nil)
@@ -134,6 +147,11 @@ class ChunkUploader {
             // Write to SMB mount
             try writeHandle.write(contentsOf: data)
             
+            // CRITICAL: Force the macOS kernel to flush the write buffer to the SMB server.
+            // Without synchronize(), the kernel buffers gigabytes of data in RAM, causing the 
+            // loop to finish instantly (0% -> 100% jump) and then hang on `close()` while speed drops to 0.
+            try writeHandle.synchronize()
+
             currentOffset += UInt64(data.count)
             
             // ** FORCE FLUSH TO QUEUE EVERY 10MB **
@@ -149,7 +167,7 @@ class ChunkUploader {
             taskLock.lock()
             self.task.uploadedBytes = currentOffset
             
-            let shouldUpdate = now.timeIntervalSince(self.lastProgressUpdateTime) > 0.25 || currentOffset >= totalSize
+            let shouldUpdate = now.timeIntervalSince(self.lastProgressUpdateTime) > 0.10 || currentOffset >= totalSize
             if shouldUpdate {
                 self.lastProgressUpdateTime = now
             }
@@ -157,9 +175,7 @@ class ChunkUploader {
             taskLock.unlock()
             
             if shouldUpdate {
-                DispatchQueue.main.async {
-                    self.onProgress(updatedTask)
-                }
+                self.onProgress(updatedTask)
             }
             
             // A minimal yield to the Swift concurrency scheduler
@@ -187,9 +203,7 @@ class ChunkUploader {
         let updatedTask = task
         taskLock.unlock()
         
-        DispatchQueue.main.async {
-            self.onProgress(updatedTask)
-        }
+        self.onProgress(updatedTask)
     }
     
     private func completeTask() {
@@ -198,8 +212,27 @@ class ChunkUploader {
         let updatedTask = task
         taskLock.unlock()
         
-        DispatchQueue.main.async {
-            self.onProgress(updatedTask)
+        self.onProgress(updatedTask)
+    }
+    
+    /// Verifies that a mount path is actually backed by a real mounted network filesystem,
+    /// not a rogue local directory. Uses `statfs()` to inspect the filesystem type.
+    static func isMountPathActuallyMounted(_ path: String) -> Bool {
+        var stat = statfs()
+        guard statfs(path, &stat) == 0 else {
+            // Path doesn't exist or is inaccessible
+            return false
         }
+        
+        // Extract the filesystem type name (e.g. "smbfs", "nfs", "webdavfs", "apfs", "hfs")
+        let fsTypeName = withUnsafePointer(to: &stat.f_fstypename) {
+            $0.withMemoryRebound(to: CChar.self, capacity: Int(MFSTYPENAMELEN)) {
+                String(cString: $0)
+            }
+        }
+        
+        // Only network filesystem types are valid mount points
+        let networkFSTypes: Set<String> = ["smbfs", "nfs", "webdavfs", "afpfs", "cifs"]
+        return networkFSTypes.contains(fsTypeName.lowercased())
     }
 }

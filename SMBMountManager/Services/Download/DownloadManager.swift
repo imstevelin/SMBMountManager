@@ -13,14 +13,15 @@ class DownloadManager: ObservableObject {
     // Add max concurrent task limit
     private let maxConcurrentTasks = 5
     private var downloaders: [UUID: ChunkDownloader] = [:]
+    private var isPausingAll: Bool = false
     
-    // Download speed tracking
+    // Download speed tracking — Exponential Moving Average (EMA) for smooth display
     @Published var currentSpeedBytesPerSecond: Int64 = 0
-    private var lastTotalBytesDownloaded: Int64 = 0
+    private var lastTotalBytesDownloaded: UInt64 = 0
     private var speedTimer: Timer?
-    private var recentSpeeds: [Int64] = []
-    private let maxRecentSpeeds = 3
-    private var lastCalculatedSpeed: Int64 = 0
+    private var emaSpeed: Double = 0.0
+    private let emaSmoothingFactor: Double = 0.3  // α: higher = more responsive, lower = smoother
+    private var lastSpeedSampleTime: Date = Date()
     
     /// Tracks the tasks involved in the current active download session to prevent progress percentage jumps.
     @Published var activeSessionTaskIDs: Set<UUID> = []
@@ -37,32 +38,41 @@ class DownloadManager: ObservableObject {
     
     private func startSpeedMeasurement() {
         speedTimer?.invalidate()
-        speedTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+        lastSpeedSampleTime = Date()
+        lastTotalBytesDownloaded = tasks.reduce(UInt64(0)) { $0 + $1.downloadedBytes }
+        
+        speedTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self = self else { return }
+                let now = Date()
+                let elapsed = now.timeIntervalSince(self.lastSpeedSampleTime)
+                guard elapsed > 0.1 else { return }
+                self.lastSpeedSampleTime = now
+                
                 let currentTotal = self.tasks.reduce(UInt64(0)) { $0 + $1.downloadedBytes }
-                
-                var instantaneousSpeed: Int64 = 0
-                if currentTotal >= UInt64(max(0, self.lastTotalBytesDownloaded)) {
-                    let diff = currentTotal - UInt64(max(0, self.lastTotalBytesDownloaded))
-                    instantaneousSpeed = Int64(diff)
-                }
-                self.lastTotalBytesDownloaded = Int64(currentTotal)
-                
-                let isDownloading = !self.tasks.filter { $0.state == .downloading }.isEmpty
+                let isDownloading = self.tasks.contains { $0.state == .downloading }
                 
                 if isDownloading {
-                    self.recentSpeeds.append(instantaneousSpeed)
-                    if self.recentSpeeds.count > self.maxRecentSpeeds {
-                        self.recentSpeeds.removeFirst()
+                    let bytesDelta = currentTotal >= self.lastTotalBytesDownloaded
+                        ? Double(currentTotal - self.lastTotalBytesDownloaded)
+                        : 0.0
+                    let instantSpeed = bytesDelta / elapsed
+                    
+                    if self.emaSpeed == 0 && instantSpeed > 0 {
+                        self.emaSpeed = instantSpeed
+                    } else {
+                        self.emaSpeed = self.emaSmoothingFactor * instantSpeed + (1.0 - self.emaSmoothingFactor) * self.emaSpeed
                     }
-                    let avgSpeed = self.recentSpeeds.reduce(0, +) / Int64(self.recentSpeeds.count)
-                    self.lastCalculatedSpeed = avgSpeed
-                    self.currentSpeedBytesPerSecond = self.lastCalculatedSpeed
+                    self.currentSpeedBytesPerSecond = Int64(self.emaSpeed)
                 } else {
-                    self.recentSpeeds.removeAll()
-                    self.currentSpeedBytesPerSecond = 0
+                    self.emaSpeed *= 0.4
+                    if self.emaSpeed < 1024 {
+                        self.emaSpeed = 0
+                    }
+                    self.currentSpeedBytesPerSecond = Int64(self.emaSpeed)
                 }
+                
+                self.lastTotalBytesDownloaded = currentTotal
             }
         }
     }
@@ -99,6 +109,13 @@ class DownloadManager: ObservableObject {
         
         if !hasActive {
             if !activeSessionTaskIDs.isEmpty {
+                // All session tasks just finished — send a single completion notification
+                let completedInSession = tasks.filter { activeSessionTaskIDs.contains($0.id) && $0.state == .completed }
+                if !completedInSession.isEmpty {
+                    // Use the first file name as the representative root name
+                    let rootName = completedInSession.first?.fileName ?? "檔案"
+                    NotificationService.sendDownloadCompleted(rootName: rootName, fileCount: completedInSession.count)
+                }
                 activeSessionTaskIDs.removeAll()
             }
         } else {
@@ -131,6 +148,7 @@ class DownloadManager: ObservableObject {
     }
     
     private func processQueue() {
+        guard !isPausingAll else { return }
         let activeTaskCount = tasks.filter { $0.state == .downloading }.count
         guard activeTaskCount < maxConcurrentTasks else { return }
         
@@ -156,15 +174,15 @@ class DownloadManager: ObservableObject {
         tasks[index].state = .downloading
         AppLogger.shared.info("[DownloadManager] Started downloading: \(tasks[index].fileName)")
         
-        let taskModel = tasks[index]
+        let taskModel = tasks[index] // It already does this!
         let downloader = ChunkDownloader(task: taskModel) { [weak self] updatedTask in
-            Task { @MainActor in
+            DispatchQueue.main.async {
                 self?.updateTask(updatedTask)
             }
         }
         downloaders[id] = downloader
         
-        Task {
+        Task.detached {
             await downloader.start()
         }
     }
@@ -216,18 +234,30 @@ class DownloadManager: ObservableObject {
     }
     
     func pauseAll() {
+        isPausingAll = true
+        let taskIdsToPause = tasks.filter { $0.state == .downloading || $0.state == .waiting }.map { $0.id }
+        
         for index in tasks.indices where tasks[index].state == .downloading || tasks[index].state == .waiting {
             tasks[index].state = .paused
-            
-            let id = tasks[index].id
-            Task {
-                await downloaders[id]?.pause()
-                DispatchQueue.main.async {
-                    self.downloaders.removeValue(forKey: id)
+        }
+        self.saveTasks()
+        
+        Task {
+            await withTaskGroup(of: Void.self) { group in
+                for id in taskIdsToPause {
+                    if let downloader = self.downloaders[id] {
+                        group.addTask { await downloader.pause() }
+                    }
                 }
             }
+            await MainActor.run {
+                for id in taskIdsToPause {
+                    self.downloaders.removeValue(forKey: id)
+                }
+                self.isPausingAll = false
+                self.processQueue()
+            }
         }
-        saveTasks()
     }
     
     func deleteAllActive() {
@@ -310,6 +340,8 @@ class DownloadManager: ObservableObject {
                 AppLogger.shared.info("[DownloadManager] Completed task: \(tasks[index].fileName)")
             } else if finalState == .error {
                 AppLogger.shared.error("[DownloadManager] Task failed: \(tasks[index].fileName)")
+                // User requested to delete the partial file upon failure
+                try? FileManager.default.removeItem(at: tasks[index].destinationURL)
             }
         }
         

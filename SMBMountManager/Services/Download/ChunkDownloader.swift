@@ -183,7 +183,7 @@ class ChunkDownloader {
             let now = Date()
             taskLock.lock()
             self.task.chunks[index].downloadedBytes = downloaded
-            let shouldUpdate = now.timeIntervalSince(self.lastProgressUpdateTime) > 0.25 || currentOffset >= endOffset
+            let shouldUpdate = now.timeIntervalSince(self.lastProgressUpdateTime) > 0.10 || currentOffset >= endOffset
             if shouldUpdate {
                 self.lastProgressUpdateTime = now
             }
@@ -191,9 +191,7 @@ class ChunkDownloader {
             taskLock.unlock()
             
             if shouldUpdate {
-                DispatchQueue.main.async {
-                    self.onProgress(updatedTask)
-                }
+                self.onProgress(updatedTask)
             }
             
             // Minimal yield
@@ -208,9 +206,7 @@ class ChunkDownloader {
         let updatedTask = task
         taskLock.unlock()
         
-        DispatchQueue.main.async {
-            self.onProgress(updatedTask)
-        }
+        self.onProgress(updatedTask)
     }
     
     private func completeTask() {
@@ -219,8 +215,6 @@ class ChunkDownloader {
         let updatedTask = task
         taskLock.unlock()
         
-        DispatchQueue.main.async {
-            self.onProgress(updatedTask)
-        }
+        self.onProgress(updatedTask)
     }
 }
