@@ -2,12 +2,12 @@
 
 ![macOS 14.0+](https://img.shields.io/badge/macOS-14.0%2B-blue.svg)
 ![Swift 5](https://img.shields.io/badge/Swift-5.0-orange.svg)
-![Release 1.2.4](https://img.shields.io/badge/Release-1.2.4-brightgreen.svg)
+![Release 1.3.4](https://img.shields.io/badge/Release-1.3.4-brightgreen.svg)
 ![License MIT](https://img.shields.io/badge/License-MIT-green.svg)
 
-> **SMB 掛載管理器** 是一個專為 macOS 設計的強大開源常駐選單列工具。經過連續的版本迭代，最新的 **v1.2.4 版本** 帶來了令人驚豔的 **Apple Liquid Glass UI 設計語言**、深度整合 macOS 的 **Finder 專屬右鍵下載擴充套件**，以及全面平滑化的下載監控體驗，讓您的 NAS 傳輸效率與視覺享受達到前所未有的高度。
+> **SMB 掛載管理器** 是一個專為 macOS 設計的強大開源常駐選單列工具。經過連續的版本迭代，最新的 **v1.3.4 版本** 帶來了令人驚豔的 **Apple Liquid Glass UI 設計語言**、深度整合 macOS 的 **Finder 專屬右鍵下載擴充套件**，以及全面平滑化的下載監控體驗，讓您的 NAS 傳輸效率與視覺享受達到前所未有的高度。
 
-## 🌟 核心特色 (v1.2.4 視覺與操作雙重升級)
+## 🌟 核心特色 (v1.3.4 視覺與操作雙重升級)
 
 - **✨ 全新 Apple Liquid Glass 視覺體驗**：
   - **極致美學**：全面導入 Liquid Glass（液態玻璃）設計語言，包含半透明毛玻璃卡片、細膩的景深發光邊框、動畫光澤進度條，以及能在列表滾動時映照出底層內容的動態導航列。
@@ -32,7 +32,7 @@
 
 ### 從 Release 下載安裝 (推薦)
 1. 前往本專案的 [Releases](https://github.com/imstevelin/smbmountmanager/releases) 頁面。
-2. 下載最新的 `SMB掛載管理器.zip` (v1.2.4)。
+2. 下載最新的 `SMB掛載管理器.zip` (v1.3.4)。
 3. 解壓縮後將 `SMB掛載管理器.app` 拖曳至您的「應用程式 (Applications)」資料夾。
 4. **推薦動作**：首次開啟時，進入「設定」>「系統服務」點擊「安裝修復程式」，以獲得針對 `/Volumes` 資料夾的最高穩定性與權限修復。
 
