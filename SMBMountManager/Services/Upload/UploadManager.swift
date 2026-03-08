@@ -327,7 +327,11 @@ class UploadManager: ObservableObject {
             tasks[index].state = .uploading
         }
         
-        let uploader = ChunkUploader(task: task) { [weak self] updatedTask in
+        guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
+        
+        // CRITICAL: Must pass tasks[index] which has the .uploading state,
+        // not the stale 'task' parameter which still has .waiting state!
+        let uploader = ChunkUploader(task: tasks[index]) { [weak self] updatedTask in
             DispatchQueue.main.async {
                 self?.updateTask(updatedTask)
             }

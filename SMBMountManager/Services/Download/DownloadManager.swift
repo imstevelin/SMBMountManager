@@ -174,7 +174,7 @@ class DownloadManager: ObservableObject {
         tasks[index].state = .downloading
         AppLogger.shared.info("[DownloadManager] Started downloading: \(tasks[index].fileName)")
         
-        let taskModel = tasks[index]
+        let taskModel = tasks[index] // It already does this!
         let downloader = ChunkDownloader(task: taskModel) { [weak self] updatedTask in
             DispatchQueue.main.async {
                 self?.updateTask(updatedTask)
