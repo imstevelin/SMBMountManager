@@ -213,6 +213,28 @@ class UploadManager: ObservableObject {
         var changed = false
         for index in tasks.indices {
             if tasks[index].state == .paused || tasks[index].state == .error {
+                // Only resume if the mount point is actually mounted
+                if let mount = AppLifecycle.shared.mountManager?.mounts.first(where: { $0.id == tasks[index].mountId }) {
+                    guard ChunkUploader.isMountPathActuallyMounted(mount.mountPath) else {
+                        continue  // Skip — mount not ready
+                    }
+                }
+                tasks[index].state = .waiting
+                tasks[index].errorMessage = nil
+                changed = true
+            }
+        }
+        if changed {
+            saveTasks()
+            processNextTasks()
+        }
+    }
+    
+    /// Resume only tasks belonging to a specific mount point (called when a mount comes online).
+    func resumeTasksForMount(mountId: String) {
+        var changed = false
+        for index in tasks.indices where tasks[index].mountId == mountId {
+            if tasks[index].state == .paused || tasks[index].state == .error {
                 tasks[index].state = .waiting
                 tasks[index].errorMessage = nil
                 changed = true
@@ -290,6 +312,20 @@ class UploadManager: ObservableObject {
     }
     
     private func startUploading(task: UploadTaskModel) {
+        // Pre-flight check: verify the mount point is actually mounted before starting
+        if let mount = AppLifecycle.shared.mountManager?.mounts.first(where: { $0.id == task.mountId }) {
+            guard ChunkUploader.isMountPathActuallyMounted(mount.mountPath) else {
+                // Mount is not ready — keep task in waiting state so it can be retried later
+                AppLogger.shared.info("[UploadManager] Mount \(mount.name) not ready, deferring task \(task.sourceURL.lastPathComponent)")
+                if let index = tasks.firstIndex(where: { $0.id == task.id }) {
+                    tasks[index].state = .paused
+                    tasks[index].errorMessage = "掛載點尚未就緒，請在掛載完成後手動繼續。"
+                    saveTasks()
+                }
+                return
+            }
+        }
+        
         if let index = tasks.firstIndex(where: { $0.id == task.id }) {
             tasks[index].state = .uploading
         }

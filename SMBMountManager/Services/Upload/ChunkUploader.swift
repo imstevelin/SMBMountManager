@@ -40,12 +40,11 @@ class ChunkUploader {
         let uploadURL = destURL.appendingPathExtension("smbupload")
         
         do {
-            // CRITICAL SAFETY CHECK: Ensure the SMB mount point is actually mounted and accessible.
-            // If the network drops, MacOS might sometimes let us create a local folder at the mount path.
-            // We must verify the root mount path exists and is a directory before proceeding.
-            var isMountDir: ObjCBool = false
-            guard FileManager.default.fileExists(atPath: mount.mountPath, isDirectory: &isMountDir), isMountDir.boolValue else {
-                fail(with: "掛載點目前無法存取，為防止建立虛假路徑，已中止上傳。")
+            // CRITICAL SAFETY CHECK: Verify the mount path is an actual mounted SMB volume,
+            // not a rogue local directory. We use statfs() to inspect the filesystem type.
+            // FileManager.fileExists is insufficient — it returns true for local rogue dirs too.
+            guard Self.isMountPathActuallyMounted(mount.mountPath) else {
+                fail(with: "掛載點尚未就緒（非有效掛載），為防止建立虛假路徑，已中止上傳。")
                 return
             }
             
@@ -78,6 +77,11 @@ class ChunkUploader {
                 // If the target completely doesn't exist, create an empty file
                 let parentDir = uploadURL.deletingLastPathComponent()
                 if !FileManager.default.fileExists(atPath: parentDir.path) {
+                    // Double-check mount is still alive before creating directories
+                    guard Self.isMountPathActuallyMounted(mount.mountPath) else {
+                        fail(with: "掛載點在傳輸準備期間斷開，為防止建立虛假路徑，已中止上傳。")
+                        return
+                    }
                     try FileManager.default.createDirectory(at: parentDir, withIntermediateDirectories: true)
                 }
                 FileManager.default.createFile(atPath: uploadURL.path, contents: nil)
@@ -194,5 +198,26 @@ class ChunkUploader {
         DispatchQueue.main.async {
             self.onProgress(updatedTask)
         }
+    }
+    
+    /// Verifies that a mount path is actually backed by a real mounted network filesystem,
+    /// not a rogue local directory. Uses `statfs()` to inspect the filesystem type.
+    static func isMountPathActuallyMounted(_ path: String) -> Bool {
+        var stat = statfs()
+        guard statfs(path, &stat) == 0 else {
+            // Path doesn't exist or is inaccessible
+            return false
+        }
+        
+        // Extract the filesystem type name (e.g. "smbfs", "nfs", "webdavfs", "apfs", "hfs")
+        let fsTypeName = withUnsafePointer(to: &stat.f_fstypename) {
+            $0.withMemoryRebound(to: CChar.self, capacity: Int(MFSTYPENAMELEN)) {
+                String(cString: $0)
+            }
+        }
+        
+        // Only network filesystem types are valid mount points
+        let networkFSTypes: Set<String> = ["smbfs", "nfs", "webdavfs", "afpfs", "cifs"]
+        return networkFSTypes.contains(fsTypeName.lowercased())
     }
 }

@@ -442,7 +442,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         
         Task { @MainActor in
             DownloadManager.shared.startAll()
-            UploadManager.shared.resumeAll()
+            // Note: Upload tasks are NOT resumed here blindly.
+            // They will auto-resume per-mount when MountEngine confirms mounts are online.
         }
     }
 
