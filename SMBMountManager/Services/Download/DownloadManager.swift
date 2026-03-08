@@ -176,13 +176,13 @@ class DownloadManager: ObservableObject {
         
         let taskModel = tasks[index]
         let downloader = ChunkDownloader(task: taskModel) { [weak self] updatedTask in
-            Task { @MainActor in
+            DispatchQueue.main.async {
                 self?.updateTask(updatedTask)
             }
         }
         downloaders[id] = downloader
         
-        Task {
+        Task.detached {
             await downloader.start()
         }
     }

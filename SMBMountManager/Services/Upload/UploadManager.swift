@@ -328,13 +328,13 @@ class UploadManager: ObservableObject {
         }
         
         let uploader = ChunkUploader(task: task) { [weak self] updatedTask in
-            Task { @MainActor in
+            DispatchQueue.main.async {
                 self?.updateTask(updatedTask)
             }
         }
         
         uploaders[task.id] = uploader
-        Task {
+        Task.detached {
             await uploader.start()
         }
     }
