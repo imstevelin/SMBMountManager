@@ -6,7 +6,7 @@ class ChunkUploader {
     private var isPaused = false
     
     // Chunk size: 1MB per chunk for optimal SMB transfer balance, allowing the kernel to interleave other commands
-    private let chunkSize: UInt64 = 1 * 1024 * 1024 
+    private let chunkSize: UInt64 = 1 * 1024 * 1024
     
     private let taskLock = NSLock()
     private var lastProgressUpdateTime: Date = Date()
@@ -112,6 +112,13 @@ class ChunkUploader {
         let writeHandle = try FileHandle(forUpdating: uploadURL)
         defer { try? writeHandle.close() }
         
+        // ** VITAL KERNEL BYPASS FOR SMB BLOAT **
+        // Prevent the Unified Buffer Cache (UBC) from filling up macOS RAM and kernel queues.
+        // This forces synchronous IO straight to the SMB layer, applying natural backpressure
+        // and preventing our tight loop from starving Finder's `stat` or `readdir` requests.
+        fcntl(readHandle.fileDescriptor, F_NOCACHE, 1)
+        fcntl(writeHandle.fileDescriptor, F_NOCACHE, 1)
+        
         var currentOffset = startOffset
         let totalSize = task.totalBytes
         
@@ -126,7 +133,17 @@ class ChunkUploader {
             
             // Write to SMB mount
             try writeHandle.write(contentsOf: data)
+            
             currentOffset += UInt64(data.count)
+            
+            // ** FORCE FLUSH TO QUEUE EVERY 10MB **
+            // Even with F_NOCACHE, smbfs can batch network packets.
+            // Forcing a hard synchronization every 10MB ensures the server acks the data,
+            // effectively pausing this tight loop and allowing macOS Finder to squeeze
+            // its operations into the now-empty smbfs queue.
+            if currentOffset % (10 * 1024 * 1024) == 0 {
+                try? writeHandle.synchronize()
+            }
             
             let now = Date()
             taskLock.lock()
@@ -145,9 +162,8 @@ class ChunkUploader {
                 }
             }
             
-            // Explicitly sleep for 10ms to give the macOS SMB kernel driver breathing room
-            // for processing `stat` and directory enumeration queries concurrently.
-            try? await Task.sleep(nanoseconds: 10_000_000)
+            // A minimal yield to the Swift concurrency scheduler
+            try? await Task.sleep(nanoseconds: 2_000_000)
         }
         
         if isPaused { return }

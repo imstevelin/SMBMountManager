@@ -108,6 +108,7 @@ class ChunkDownloader {
         do {
             let writeHandle = try FileHandle(forUpdating: task.destinationURL)
             defer { try? writeHandle.close() }
+            fcntl(writeHandle.fileDescriptor, F_NOCACHE, 1)
             
             try await withThrowingTaskGroup(of: Void.self) { group in
                 var concurrentCount = 0
@@ -150,6 +151,10 @@ class ChunkDownloader {
         let readHandle = try FileHandle(forReadingFrom: sourceURL)
         defer { try? readHandle.close() }
         
+        // ** VITAL KERNEL BYPASS FOR SMB BLOAT **
+        // Prevent the Unified Buffer Cache (UBC) from filling up macOS RAM and kernel queues.
+        fcntl(readHandle.fileDescriptor, F_NOCACHE, 1)
+        
         var currentOffset = chunk.startOffset + chunk.downloadedBytes
         let endOffset = chunk.startOffset + chunk.expectedSize
         let bufferSize: UInt64 = 1024 * 1024 // 1MB buffer
@@ -168,6 +173,13 @@ class ChunkDownloader {
             currentOffset += UInt64(data.count)
             let downloaded = currentOffset - chunk.startOffset
             
+            // Periodically flush local disk to avoid huge dirty pages cache building up locally
+            if currentOffset % (50 * 1024 * 1024) == 0 {
+                fileLock.lock()
+                try? writeHandle.synchronize()
+                fileLock.unlock()
+            }
+            
             let now = Date()
             taskLock.lock()
             self.task.chunks[index].downloadedBytes = downloaded
@@ -184,7 +196,8 @@ class ChunkDownloader {
                 }
             }
             
-            try? await Task.sleep(nanoseconds: 10_000_000)
+            // Minimal yield
+            try? await Task.sleep(nanoseconds: 2_000_000)
         }
     }
     
