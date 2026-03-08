@@ -15,13 +15,13 @@ class UploadManager: ObservableObject {
     private var uploaders: [UUID: ChunkUploader] = [:]
     private var isPausingAll: Bool = false
     
-    // Upload speed tracking
+    // Upload speed tracking — Exponential Moving Average (EMA) for smooth display
     @Published var currentSpeedBytesPerSecond: Int64 = 0
-    private var lastTotalBytesUploaded: Int64 = 0
+    private var lastTotalBytesUploaded: UInt64 = 0
     private var speedTimer: Timer?
-    private var recentSpeeds: [Int64] = []
-    private let maxRecentSpeeds = 3
-    private var lastCalculatedSpeed: Int64 = 0
+    private var emaSpeed: Double = 0.0
+    private let emaSmoothingFactor: Double = 0.3  // α: higher = more responsive, lower = smoother
+    private var lastSpeedSampleTime: Date = Date()
     
     /// Tracks the tasks involved in the current active upload session to prevent progress percentage jumps.
     @Published var activeSessionTaskIDs: Set<UUID> = []
@@ -38,32 +38,44 @@ class UploadManager: ObservableObject {
     
     private func startSpeedMeasurement() {
         speedTimer?.invalidate()
-        speedTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+        lastSpeedSampleTime = Date()
+        lastTotalBytesUploaded = tasks.reduce(UInt64(0)) { $0 + $1.uploadedBytes }
+        
+        speedTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self = self else { return }
+                let now = Date()
+                let elapsed = now.timeIntervalSince(self.lastSpeedSampleTime)
+                guard elapsed > 0.1 else { return }
+                self.lastSpeedSampleTime = now
+                
                 let currentTotal = self.tasks.reduce(UInt64(0)) { $0 + $1.uploadedBytes }
-                
-                var instantaneousSpeed: Int64 = 0
-                if currentTotal >= UInt64(max(0, self.lastTotalBytesUploaded)) {
-                    let diff = currentTotal - UInt64(max(0, self.lastTotalBytesUploaded))
-                    instantaneousSpeed = Int64(diff)
-                }
-                self.lastTotalBytesUploaded = Int64(currentTotal)
-                
-                let isUploading = !self.tasks.filter { $0.state == .uploading }.isEmpty
+                let isUploading = self.tasks.contains { $0.state == .uploading }
                 
                 if isUploading {
-                    self.recentSpeeds.append(instantaneousSpeed)
-                    if self.recentSpeeds.count > self.maxRecentSpeeds {
-                        self.recentSpeeds.removeFirst()
+                    let bytesDelta = currentTotal >= self.lastTotalBytesUploaded
+                        ? Double(currentTotal - self.lastTotalBytesUploaded)
+                        : 0.0
+                    let instantSpeed = bytesDelta / elapsed  // bytes per second
+                    
+                    // EMA: smoothedSpeed = α * newSample + (1 - α) * previousSmoothed
+                    if self.emaSpeed == 0 && instantSpeed > 0 {
+                        // First non-zero sample — seed the EMA to avoid slow ramp-up
+                        self.emaSpeed = instantSpeed
+                    } else {
+                        self.emaSpeed = self.emaSmoothingFactor * instantSpeed + (1.0 - self.emaSmoothingFactor) * self.emaSpeed
                     }
-                    let avgSpeed = self.recentSpeeds.reduce(0, +) / Int64(self.recentSpeeds.count)
-                    self.lastCalculatedSpeed = avgSpeed
-                    self.currentSpeedBytesPerSecond = self.lastCalculatedSpeed
+                    self.currentSpeedBytesPerSecond = Int64(self.emaSpeed)
                 } else {
-                    self.recentSpeeds.removeAll()
-                    self.currentSpeedBytesPerSecond = 0
+                    // Graceful decay: wind down smoothly instead of snapping to 0
+                    self.emaSpeed *= 0.4
+                    if self.emaSpeed < 1024 {
+                        self.emaSpeed = 0
+                    }
+                    self.currentSpeedBytesPerSecond = Int64(self.emaSpeed)
                 }
+                
+                self.lastTotalBytesUploaded = currentTotal
             }
         }
     }
