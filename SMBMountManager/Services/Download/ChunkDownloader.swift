@@ -34,21 +34,25 @@ class ChunkDownloader {
         // Use local mount path since it's already mounted by the OS
         let sourceURL = URL(fileURLWithPath: mount.mountPath).appendingPathComponent(task.relativeSMBPath)
         
-        if task.totalBytes == 0 {
+        if task.chunks.isEmpty {
             do {
                 if !FileManager.default.fileExists(atPath: sourceURL.path) {
                     fail(with: "來源檔案不存在或尚未連線")
                     return
                 }
                 
-                let attributes = try FileManager.default.attributesOfItem(atPath: sourceURL.path)
-                guard let size = attributes[.size] as? UInt64 else {
-                    fail(with: "無法取得檔案大小")
-                    return
+                let size: UInt64
+                if task.totalBytes == 0 {
+                    let attributes = try FileManager.default.attributesOfItem(atPath: sourceURL.path)
+                    guard let attrSize = attributes[.size] as? UInt64 else {
+                        fail(with: "無法取得檔案大小")
+                        return
+                    }
+                    size = attrSize
+                    task.totalBytes = size
+                } else {
+                    size = task.totalBytes
                 }
-                
-                // Update total size
-                task.totalBytes = size
                 
                 // Create chunks
                 var chunks: [DownloadChunk] = []

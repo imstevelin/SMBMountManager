@@ -1,5 +1,6 @@
 import SwiftUI
 import UserNotifications
+import Combine
 
 @main
 struct SMBMountManagerApp: App {
@@ -59,64 +60,119 @@ class AppLifecycle {
     var lastWakeTime: Date? = nil
 }
 
+// MARK: - Dedicated Monotonic Progress Manager
+
+@MainActor
+class TransferProgressManager: ObservableObject {
+    static let shared = TransferProgressManager()
+    
+    @Published var overallProgress: Double = 0.0
+    @Published var isActive: Bool = false
+    @Published var isPaused: Bool = false
+    @Published var hasSessionTasks: Bool = false
+    
+    // Core monotonic state variables to prevent progress bar jumps
+    private var highestProgress: Double = 0.0
+    private var lastTotalBytes: UInt64 = 0
+    private var cancellables = Set<AnyCancellable>()
+    
+    private init() {
+        Publishers.CombineLatest(DownloadManager.shared.$tasks, UploadManager.shared.$tasks)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] dlTasks, ulTasks in
+                self?.recalculate(dlTasks: dlTasks, ulTasks: ulTasks)
+            }
+            .store(in: &cancellables)
+    }
+    
+    private func recalculate(dlTasks: [DownloadTaskModel], ulTasks: [UploadTaskModel]) {
+        let downloadManager = DownloadManager.shared
+        let uploadManager = UploadManager.shared
+        
+        let sessionDLTasks = dlTasks.filter { downloadManager.activeSessionTaskIDs.contains($0.id) }
+        let sessionULTasks = ulTasks.filter { uploadManager.activeSessionTaskIDs.contains($0.id) }
+        
+        let isDownloading = dlTasks.contains { $0.state == .downloading }
+        let isUploading = ulTasks.contains { $0.state == .uploading }
+        let currentIsActive = isDownloading || isUploading
+        
+        let isDlPaused = !isDownloading && sessionDLTasks.contains { $0.state == .paused }
+        let isUlPaused = !isUploading && sessionULTasks.contains { $0.state == .paused }
+        let currentIsPaused = !currentIsActive && (isDlPaused || isUlPaused)
+        
+        let currentHasSessionTasks = !sessionDLTasks.isEmpty || !sessionULTasks.isEmpty
+        
+        if currentHasSessionTasks {
+            let dlTotal = sessionDLTasks.reduce(UInt64(0)) { $0 + $1.totalBytes }
+            let dlDone = sessionDLTasks.reduce(UInt64(0)) { $0 + ($1.state == .completed ? $1.totalBytes : $1.downloadedBytes) }
+            
+            let ulTotal = sessionULTasks.reduce(UInt64(0)) { $0 + $1.totalBytes }
+            let ulDone = sessionULTasks.reduce(UInt64(0)) { $0 + ($1.state == .completed ? $1.totalBytes : $1.uploadedBytes) }
+            
+            let totalBytes = dlTotal + ulTotal
+            let totalDone = dlDone + ulDone
+            
+            var rawProgress = totalBytes > 0 ? (Double(totalDone) / Double(totalBytes)) : 0.0
+            rawProgress = min(max(rawProgress, 0.0), 1.0)
+            
+            // Core logic: Enforce strictly monotonic progress (never decreasing)
+            if totalBytes > lastTotalBytes {
+                // Denominator increased (e.g. new files added). Safe to drop progress percentage to represent the new combined pool.
+                highestProgress = rawProgress
+            } else if totalBytes < lastTotalBytes {
+                // Denominator shrank (e.g. user cleared completed errors or paused tasks from the UI). Allow recalculation.
+                highestProgress = rawProgress
+            } else {
+                // Typical state: Total bytes remains constant. We guarantee progress ONLY moves forward.
+                if rawProgress > highestProgress {
+                    highestProgress = rawProgress
+                }
+            }
+            
+            self.lastTotalBytes = totalBytes
+            self.overallProgress = highestProgress
+            self.isActive = currentIsActive
+            self.isPaused = currentIsPaused
+            self.hasSessionTasks = true
+        } else {
+            self.isActive = false
+            self.isPaused = false
+            self.overallProgress = 0.0
+            self.highestProgress = 0.0
+            self.lastTotalBytes = 0
+            self.hasSessionTasks = false
+        }
+    }
+}
+
 // MARK: - Menu Bar Label (animated icon + connection count)
 
 struct MenuBarLabel: View {
     @ObservedObject var mountManager: MountManager
     @ObservedObject var settings: AppSettings
-    @StateObject private var downloadManager = DownloadManager.shared
-    @StateObject private var uploadManager = UploadManager.shared
+    @StateObject private var progressManager = TransferProgressManager.shared
 
     var body: some View {
         HStack(spacing: 3) {
-            let allDLTasks = downloadManager.tasks
-            let sessionDLTasks = allDLTasks.filter { downloadManager.activeSessionTaskIDs.contains($0.id) }
-            
-            let allULTasks = uploadManager.tasks
-            let sessionULTasks = allULTasks.filter { uploadManager.activeSessionTaskIDs.contains($0.id) }
-            
-            let isDownloading = allDLTasks.contains { $0.state == .downloading }
-            let isUploading = allULTasks.contains { $0.state == .uploading }
-            let isActive = isDownloading || isUploading
-            
-            let isDlPaused = !isDownloading && sessionDLTasks.contains { $0.state == .paused }
-            let isUlPaused = !isUploading && sessionULTasks.contains { $0.state == .paused }
-            let isPaused = !isActive && (isDlPaused || isUlPaused)
-            
-            let hasSessionTasks = !sessionDLTasks.isEmpty || !sessionULTasks.isEmpty
-            
-            if hasSessionTasks {
-                let dlTotal = sessionDLTasks.reduce(UInt64(0)) { $0 + $1.totalBytes }
-                let dlDone = sessionDLTasks.reduce(UInt64(0)) { $0 + ($1.state == .completed ? $1.totalBytes : $1.downloadedBytes) }
-                
-                let ulTotal = sessionULTasks.reduce(UInt64(0)) { $0 + $1.totalBytes }
-                let ulDone = sessionULTasks.reduce(UInt64(0)) { $0 + ($1.state == .completed ? $1.totalBytes : $1.uploadedBytes) }
-                
-                let totalBytes = dlTotal + ulTotal
-                let totalDone = dlDone + ulDone
-                
-                let progress = totalBytes > 0 ? (CGFloat(totalDone) / CGFloat(totalBytes)) : 0.0
-                
-                Image(nsImage: .downloadProgressRing(progress: progress, isPaused: isPaused))
+            if progressManager.hasSessionTasks {
+                Image(nsImage: .downloadProgressRing(progress: progressManager.overallProgress, isPaused: progressManager.isPaused))
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(height: 14)
                 
-                if isActive {
-                    Text("\(Int(progress * 100))%")
+                if progressManager.isActive {
+                    Text("\(Int(progressManager.overallProgress * 100))%")
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
                 }
-            }
-            
-            if !hasSessionTasks {
+            } else {
                 Image(systemName: mountManager.overallStatusIcon)
-            }
-            
-            if settings.showMountCount && !mountManager.mounts.isEmpty && !hasSessionTasks {
-                let connected = mountManager.statuses.values.filter { $0.isMounted && $0.isResponsive }.count
-                let total = mountManager.mounts.count
-                Text("\(connected)/\(total)")
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                
+                if settings.showMountCount && !mountManager.mounts.isEmpty {
+                    let connected = mountManager.statuses.values.filter { $0.isMounted && $0.isResponsive }.count
+                    let total = mountManager.mounts.count
+                    Text("\(connected)/\(total)")
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                }
             }
         }
     }
@@ -179,14 +235,15 @@ struct MenuBarLabel: View {
                                 try? FileManager.default.createDirectory(at: targetFolderURL, withIntermediateDirectories: true)
                                 
                                 Task.detached {
-                                    var batchTasks: [(fileName: String, mountId: String, relativeSMBPath: String, destinationURL: URL)] = []
+                                    var batchTasks: [(fileName: String, mountId: String, relativeSMBPath: String, destinationURL: URL, totalBytes: UInt64)] = []
                                     
                                     // Recursively find all files
-                                    if let enumerator = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.isRegularFileKey]) {
+                                    if let enumerator = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey]) {
                                         for case let fileURL as URL in enumerator {
                                             do {
-                                                let resourceValues = try fileURL.resourceValues(forKeys: [.isRegularFileKey])
+                                                let resourceValues = try fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
                                                 if resourceValues.isRegularFile == true {
+                                                    let fileSize = UInt64(resourceValues.fileSize ?? 0)
                                                     // Extract relative path from base URL
                                                     let relativePathToFile = fileURL.path.replacingOccurrences(of: url.path + "/", with: "")
                                                     
@@ -204,7 +261,8 @@ struct MenuBarLabel: View {
                                                         fileName: fileURL.lastPathComponent,
                                                         mountId: mount.id,
                                                         relativeSMBPath: relativeSMBPath,
-                                                        destinationURL: specificDestURL
+                                                        destinationURL: specificDestURL,
+                                                        totalBytes: fileSize
                                                     ))
                                                 }
                                             } catch {
@@ -225,13 +283,26 @@ struct MenuBarLabel: View {
                                     relativeSMBPath.removeFirst()
                                 }
                                 
-                                DownloadManager.shared.addTask(
-                                    fileName: url.lastPathComponent,
-                                    mountId: mount.id,
-                                    relativeSMBPath: relativeSMBPath,
-                                    destinationURL: destinationURL
-                                )
-                                print("[Services] Started download for \(url.lastPathComponent) to \(destinationURL.path)")
+                                
+                                Task.detached {
+                                    let size: UInt64
+                                    if let attr = try? FileManager.default.attributesOfItem(atPath: path) {
+                                        size = attr[.size] as? UInt64 ?? 0
+                                    } else {
+                                        size = 0
+                                    }
+                                    
+                                    await MainActor.run {
+                                        DownloadManager.shared.addTask(
+                                            fileName: url.lastPathComponent,
+                                            mountId: mount.id,
+                                            relativeSMBPath: relativeSMBPath,
+                                            destinationURL: destinationURL,
+                                            totalBytes: size
+                                        )
+                                        print("[Services] Started download for \(url.lastPathComponent) to \(destinationURL.path)")
+                                    }
+                                }
                             }
                         }
                         }

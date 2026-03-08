@@ -108,14 +108,15 @@ class DownloadManager: ObservableObject {
         }
     }
     
-    func addTasks(batch: [(fileName: String, mountId: String, relativeSMBPath: String, destinationURL: URL)]) {
+    func addTasks(batch: [(fileName: String, mountId: String, relativeSMBPath: String, destinationURL: URL, totalBytes: UInt64)]) {
         var newTasks: [DownloadTaskModel] = []
         for item in batch {
             let task = DownloadTaskModel(
                 fileName: item.fileName,
                 mountId: item.mountId,
                 relativeSMBPath: item.relativeSMBPath,
-                destinationURL: item.destinationURL
+                destinationURL: item.destinationURL,
+                totalBytes: item.totalBytes
             )
             newTasks.append(task)
             AppLogger.shared.info("[DownloadManager] Queued download for file: \(item.fileName)")
@@ -125,8 +126,8 @@ class DownloadManager: ObservableObject {
         processQueue()
     }
     
-    func addTask(fileName: String, mountId: String, relativeSMBPath: String, destinationURL: URL) {
-        addTasks(batch: [(fileName, mountId, relativeSMBPath, destinationURL)])
+    func addTask(fileName: String, mountId: String, relativeSMBPath: String, destinationURL: URL, totalBytes: UInt64 = 0) {
+        addTasks(batch: [(fileName, mountId, relativeSMBPath, destinationURL, totalBytes)])
     }
     
     private func processQueue() {
