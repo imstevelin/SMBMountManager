@@ -1,4 +1,19 @@
+# Build artifacts
 build/
-.DS_Store
-*.log
 build_final/
+*.log
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Xcode
+xcuserdata/
+*.xcscmblueprint
+
+# Release zips
+*.zip
+
+# Test binaries
+test_*
+!test_*.swift
