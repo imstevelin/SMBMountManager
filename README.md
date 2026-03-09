@@ -1,4 +1,4 @@
-# SMB 掛載管理器 (SMB Mount Manager)
+# SMB 掛載管理器 (For MacOS)
 
 ![macOS 14.0+](https://img.shields.io/badge/macOS-14.0%2B-blue.svg)
 ![Swift 5](https://img.shields.io/badge/Swift-5.0-orange.svg)
