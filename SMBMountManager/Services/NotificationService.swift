@@ -15,9 +15,9 @@ struct NotificationService {
 
     // MARK: - Event Coalescing Buffers
     // Accumulate mount names within a single refresh cycle and flush once.
-    private static var pendingConnected: [String] = []
-    private static var pendingDisconnected: [String] = []
-    private static var pendingStale: [String] = []
+    private static var pendingConnected: Set<String> = []
+    private static var pendingDisconnected: Set<String> = []
+    private static var pendingStale: Set<String> = []
     private static let coalesceLock = NSLock()
     
     // MARK: - Humorous Template System
@@ -135,21 +135,37 @@ struct NotificationService {
     /// Queue a mount-connected event. Call `flushMountEvents()` at the end of the refresh cycle.
     static func queueMountConnected(name: String) {
         coalesceLock.lock()
-        pendingConnected.append(name)
+        pendingConnected.insert(name)
+        // Mutex: remove any opposing events awaiting flush
+        pendingDisconnected.remove(name)
+        pendingStale.remove(name)
         coalesceLock.unlock()
     }
 
     /// Queue a mount-disconnected event. Call `flushMountEvents()` at the end of the refresh cycle.
     static func queueMountDisconnected(name: String) {
         coalesceLock.lock()
-        pendingDisconnected.append(name)
+        pendingDisconnected.insert(name)
+        // Mutex: remove any opposing matching connection
+        pendingConnected.remove(name)
         coalesceLock.unlock()
     }
 
     /// Queue a mount-stale event. Call `flushMountEvents()` at the end of the refresh cycle.
     static func queueMountStale(name: String) {
         coalesceLock.lock()
-        pendingStale.append(name)
+        pendingStale.insert(name)
+        // Mutex: remove opposing
+        pendingConnected.remove(name)
+        coalesceLock.unlock()
+    }
+    
+    /// Completely discard any queued mount events. Call immediately when Mac wakes from sleep.
+    static func clearPendingEvents() {
+        coalesceLock.lock()
+        pendingConnected.removeAll()
+        pendingDisconnected.removeAll()
+        pendingStale.removeAll()
         coalesceLock.unlock()
     }
 
@@ -163,9 +179,9 @@ struct NotificationService {
         }
 
         coalesceLock.lock()
-        let connected = pendingConnected
-        let disconnected = pendingDisconnected
-        let stale = pendingStale
+        let connected = Array(pendingConnected)
+        let disconnected = Array(pendingDisconnected)
+        let stale = Array(pendingStale)
         pendingConnected.removeAll()
         pendingDisconnected.removeAll()
         pendingStale.removeAll()

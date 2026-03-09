@@ -17,10 +17,16 @@ class DownloadManager: ObservableObject {
     
     // Download speed tracking — Exponential Moving Average (EMA) for smooth display
     @Published var currentSpeedBytesPerSecond: Int64 = 0
+    @Published var currentETASpeedBytesPerSecond: Int64 = 0 // Slower EMA specifically for ETA calculation
     private var lastTotalBytesDownloaded: UInt64 = 0
     private var speedTimer: Timer?
     private var emaSpeed: Double = 0.0
-    private let emaSmoothingFactor: Double = 0.3  // α: higher = more responsive, lower = smoother
+    private var etaEmaSpeed: Double = 0.0
+    private let emaSmoothingFactor: Double = 0.15  // α: lower = smoother, less spiky
+    private let etaSmoothingFactor: Double = 0.02  // Much slower α for a stable ETA that represents the last ~50 seconds
+    private let emaWarmUpFactor: Double = 0.5       // α for the first N samples (fast ramp)
+    private var emaSampleCount: Int = 0             // Number of samples since last reset
+    private let emaWarmUpSamples: Int = 5           // Use warm-up α for this many samples
     private var lastSpeedSampleTime: Date = Date()
     
     /// Tracks the tasks involved in the current active download session to prevent progress percentage jumps.
@@ -36,12 +42,24 @@ class DownloadManager: ObservableObject {
         startSpeedMeasurement()
     }
     
+    /// Reset speed tracking state. Call when downloads start or resume for instant accurate readings.
+    func resetSpeedTracking() {
+        emaSpeed = 0.0
+        etaEmaSpeed = 0.0
+        emaSampleCount = 0
+        currentSpeedBytesPerSecond = 0
+        currentETASpeedBytesPerSecond = 0
+        lastTotalBytesDownloaded = tasks.reduce(UInt64(0)) { $0 + $1.downloadedBytes }
+        lastSpeedSampleTime = Date()
+    }
+    
     private func startSpeedMeasurement() {
         speedTimer?.invalidate()
         lastSpeedSampleTime = Date()
         lastTotalBytesDownloaded = tasks.reduce(UInt64(0)) { $0 + $1.downloadedBytes }
         
-        speedTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+        // Sample every 1 second for stable byte deltas
+        let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self = self else { return }
                 let now = Date()
@@ -56,25 +74,59 @@ class DownloadManager: ObservableObject {
                     let bytesDelta = currentTotal >= self.lastTotalBytesDownloaded
                         ? Double(currentTotal - self.lastTotalBytesDownloaded)
                         : 0.0
-                    let instantSpeed = bytesDelta / elapsed
+                    var instantSpeed = bytesDelta / elapsed
+                    
+                    // Spike clamp: if the instantaneous reading is >5x the current EMA,
+                    // it's likely a kernel buffer flush burst, not real sustained throughput.
+                    if self.emaSpeed > 0 && instantSpeed > self.emaSpeed * 5.0 {
+                        instantSpeed = self.emaSpeed * 1.5
+                    }
+                    
+                    // Use warm-up factor for the first N samples for fast convergence
+                    let alpha = self.emaSampleCount < self.emaWarmUpSamples ? self.emaWarmUpFactor : self.emaSmoothingFactor
+                    // ETA also needs warm-up so it converges quickly after restart instead of
+                    // being stuck on an inflated first sample for ~50 seconds.
+                    let etaAlpha = self.emaSampleCount < self.emaWarmUpSamples ? 0.3 : self.etaSmoothingFactor
                     
                     if self.emaSpeed == 0 && instantSpeed > 0 {
                         self.emaSpeed = instantSpeed
+                        self.etaEmaSpeed = instantSpeed
                     } else {
-                        self.emaSpeed = self.emaSmoothingFactor * instantSpeed + (1.0 - self.emaSmoothingFactor) * self.emaSpeed
+                        self.emaSpeed = alpha * instantSpeed + (1.0 - alpha) * self.emaSpeed
+                        self.etaEmaSpeed = etaAlpha * instantSpeed + (1.0 - etaAlpha) * self.etaEmaSpeed
                     }
+                    self.emaSampleCount += 1
                     self.currentSpeedBytesPerSecond = Int64(self.emaSpeed)
+                    
+                    // Clamp ETA speed to stay within a reasonable range of the live speed.
+                    // Lower bound: don't let ETA speed lag too far below (prevents absurdly long ETAs)
+                    if self.etaEmaSpeed > 0 && self.emaSpeed > 0 && self.etaEmaSpeed < self.emaSpeed * 0.3 {
+                         self.etaEmaSpeed = self.emaSpeed * 0.5
+                    }
+                    // Upper bound: don't let ETA speed stay too far above (prevents absurdly short ETAs)
+                    if self.etaEmaSpeed > 0 && self.emaSpeed > 0 && self.etaEmaSpeed > self.emaSpeed * 3.0 {
+                         self.etaEmaSpeed = self.emaSpeed * 2.0
+                    }
+                    self.currentETASpeedBytesPerSecond = Int64(self.etaEmaSpeed)
+                    
                 } else {
                     self.emaSpeed *= 0.4
+                    self.etaEmaSpeed *= 0.4
                     if self.emaSpeed < 1024 {
                         self.emaSpeed = 0
+                        self.etaEmaSpeed = 0
                     }
                     self.currentSpeedBytesPerSecond = Int64(self.emaSpeed)
+                    self.currentETASpeedBytesPerSecond = Int64(self.etaEmaSpeed)
+                    // Reset sample count so next download session gets warm-up
+                    self.emaSampleCount = 0
                 }
                 
                 self.lastTotalBytesDownloaded = currentTotal
             }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        speedTimer = timer
     }
     
     private func loadTasks() {
@@ -173,6 +225,9 @@ class DownloadManager: ObservableObject {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
         tasks[index].state = .downloading
         AppLogger.shared.info("[DownloadManager] Started downloading: \(tasks[index].fileName)")
+        
+        // Reset EMA so speed ramps up quickly from this fresh start
+        resetSpeedTracking()
         
         let taskModel = tasks[index] // It already does this!
         let downloader = ChunkDownloader(task: taskModel) { [weak self] updatedTask in
@@ -340,8 +395,9 @@ class DownloadManager: ObservableObject {
                 AppLogger.shared.info("[DownloadManager] Completed task: \(tasks[index].fileName)")
             } else if finalState == .error {
                 AppLogger.shared.error("[DownloadManager] Task failed: \(tasks[index].fileName)")
-                // User requested to delete the partial file upon failure
-                try? FileManager.default.removeItem(at: tasks[index].destinationURL)
+                // Note: We deliberately DO NOT remove the partial file upon error.
+                // Keeping the partial file allows the background task engine to automatically
+                // pick up the pieces and execute breakpoint-resume when the network is restored.
             }
         }
         

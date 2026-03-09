@@ -33,7 +33,7 @@ class UpdateService {
     static let shared = UpdateService()
     private let repoURL = "https://api.github.com/repos/imstevelin/SMBMountManager/releases/latest"
 
-    func checkForUpdates(manual: Bool = false) {
+    func checkForUpdates(manual: Bool = false, silent: Bool = false) {
         guard let url = URL(string: repoURL) else { return }
         
         // Prevent multiple simultaneous update checks from causing issues
@@ -58,7 +58,13 @@ class UpdateService {
                 
                 DispatchQueue.main.async {
                     if self.isNewerVersion(current: currentVersion, latest: latestVersion) {
-                        self.showUpdateAlert(release: release)
+                        if silent {
+                            // Silent auto-update: download, install, and restart without user interaction
+                            AppLogger.shared.info("[UpdateService] New version \(latestVersion) found. Starting silent auto-update...")
+                            self.performAutoUpdate(release: release)
+                        } else {
+                            self.showUpdateAlert(release: release)
+                        }
                     } else if manual {
                         self.showUpToDateAlert(currentVersion: currentVersion)
                     }
@@ -90,10 +96,7 @@ class UpdateService {
         
         isUpdating = true
         
-        isUpdating = true
-        
-        // Removed the modal alert blocking the update process
-        // to achieve silent downloading in the background.
+        // Silent download in the background
         
         let session = URLSession(configuration: .default)
         let downloadTask = session.downloadTask(with: downloadURL) { [weak self] tempURL, response, error in

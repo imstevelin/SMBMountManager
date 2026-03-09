@@ -117,6 +117,15 @@ struct MainSettingsView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenUploadsTab"))) { _ in
             selectedTab = 2
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenMountsTab"))) { _ in
+            selectedTab = 0
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenMainWindow"))) { _ in
+            NSApp.activate(ignoringOtherApps: true)
+            if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "settings" || $0.title == "SMB 掛載管理器" }) {
+                window.makeKeyAndOrderFront(nil)
+            }
+        }
     }
 }
 
@@ -679,7 +688,7 @@ struct PreferencesTabView: View {
         Form {
             Section("一般") {
                 Toggle("開機時自動啟動", isOn: $settings.launchAtLogin)
-                Toggle("啟動時自動檢查更新", isOn: $settings.autoCheckUpdates)
+                Toggle("啟動時自動檢查並更新", isOn: $settings.autoCheckUpdates)
                 Toggle("在選單列顯示連線數量", isOn: $settings.showMountCount)
             }
 

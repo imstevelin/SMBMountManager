@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import AppKit
+import Network
 
 /// Central manager: owns in-process mount engines and built-in health monitor.
 /// Replaces the previous launchd-agent-based architecture.
@@ -18,6 +19,9 @@ class MountManager: ObservableObject {
 
     /// Per-mount engines running in-process
     private var engines: [String: MountEngine] = [:]
+    
+    /// Track previous network interface to bounce connections when upgrading (e.g. WiFi -> Ethernet)
+    private var lastKnownInterfaceType: NWInterface.InterfaceType?
 
     /// Health monitor timer
     private var monitorTimer: Timer?
@@ -138,27 +142,47 @@ class MountManager: ObservableObject {
                                 // Only query file system attributes if the mount is proven responsive,
                                 // because `attributesOfFileSystem` can block indefinitely on a hung SMB share.
                                 if status.isResponsive {
-                                    // Use a strict 2-second timeout wrapper around FileManager calls
+                                    // Use Process to get capacity via `df` to avoid FileManager hanging the UI task group indefinitely
                                     let capacityData: (total: Int64, free: Int64)? = await {
                                         let path = mount.mountPath
-                                        return await withTaskGroup(of: (total: Int64, free: Int64)?.self) { group in
-                                            group.addTask {
-                                                if let attr = try? FileManager.default.attributesOfFileSystem(forPath: path),
-                                                   let systemSize = attr[.systemSize] as? NSNumber,
-                                                   let freeSize = attr[.systemFreeSize] as? NSNumber {
-                                                    return (systemSize.int64Value, freeSize.int64Value)
-                                                }
-                                                return nil
+                                        let task = Process()
+                                        task.launchPath = "/bin/df"
+                                        task.arguments = ["-k", path]
+                                        let pipe = Pipe()
+                                        task.standardOutput = pipe
+                                        task.standardError = FileHandle.nullDevice
+                                        
+                                        var didTimeout = false
+                                        do {
+                                            try task.run()
+                                            let deadline = Date().addingTimeInterval(2.0)
+                                            while task.isRunning && Date() < deadline {
+                                                try? await Task.sleep(nanoseconds: 100_000_000)
                                             }
-                                            group.addTask {
-                                                try? await Task.sleep(nanoseconds: 2_000_000_000) // 2s timeout
-                                                return nil
+                                            if task.isRunning {
+                                                task.terminate()
+                                                didTimeout = true
                                             }
-                                            // Wait for whichever task completes first
-                                            let result = await group.next() ?? nil
-                                            group.cancelAll()
-                                            return result
+                                        } catch {
+                                            return nil
                                         }
+                                        
+                                        if didTimeout { return nil }
+                                        
+                                        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                                        if let output = String(data: data, encoding: .utf8) {
+                                            let lines = output.components(separatedBy: .newlines)
+                                            if lines.count >= 2 {
+                                                let components = lines[1].components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+                                                if components.count >= 4,
+                                                   let totalKB = Int64(components[1]),
+                                                   let freeKB = Int64(components[3]) {
+                                                    // df outputs in KB (1024 bytes) block sizes
+                                                    return (totalKB * 1024, freeKB * 1024)
+                                                }
+                                            }
+                                        }
+                                        return nil
                                     }()
                                     
                                     if let cap = capacityData {
@@ -200,9 +224,11 @@ class MountManager: ObservableObject {
                         await MainActor.run { [weak self] in
                             guard let self = self else { return }
                             
-                            // Check for notifications on strictly serial source of truth
+                            // Check for notifications on strictly serial source of truth.
                             if let realOld = self.statuses[name] {
-                                if !realOld.isMounted && finalStatus.isMounted {
+                                // Rule 1: Do not send "connected" if the mount is artificially restricted/paused by the app,
+                                // even if the OS still considers the directory practically mounted.
+                                if !realOld.isMounted && finalStatus.isMounted && !finalStatus.isPaused {
                                     NotificationService.queueMountConnected(name: name)
                                     NotificationService.clearNotifications(for: name)
                                 } else if realOld.isMounted && !finalStatus.isMounted && !self.isPaused && !self.pausedMounts.contains(name) && !self.networkPausedMounts.contains(name) {
@@ -485,6 +511,11 @@ class MountManager: ObservableObject {
             let allPaused = await MainActor.run { self.pausedMounts }
             let netPaused = await MainActor.run { self.networkPausedMounts }
             let isNetworkUp = await MainActor.run { AppLifecycle.shared.networkMonitor?.isConnected ?? true }
+            let currentInterfaceType = await MainActor.run { AppLifecycle.shared.networkMonitor?.interfaceType }
+            let previousInterfaceType = await MainActor.run { self.lastKnownInterfaceType }
+            
+            let didInterfaceChange = (previousInterfaceType != nil && currentInterfaceType != nil && previousInterfaceType != currentInterfaceType)
+            await MainActor.run { self.lastKnownInterfaceType = currentInterfaceType }
             
             await withTaskGroup(of: Void.self) { group in
                 for mount in allMounts {
@@ -518,7 +549,19 @@ class MountManager: ObservableObject {
                             if isMounted {
                                 if !allPaused.contains(mount.name) {
                                     let isEngineRunning = await MainActor.run { self.engines[mount.name] != nil }
-                                    if !isEngineRunning {
+                                    
+                                    // Interface Transition Priority Bounce (e.g. Wi-Fi -> Ethernet)
+                                    // Force-unmount the active connection. Since it's not in pausedMounts, 
+                                    // the Health Monitor or restartEngine will immediately spin it back up, binding the new socket to the faster interface!
+                                    if didInterfaceChange {
+                                        AppLogger.shared.info("[MountManager] Interface transition detected. Bouncing mount '\(mount.name)'.")
+                                        await MainActor.run {
+                                            Task.detached { [weak self] in
+                                                self?.forceUnmount(mount.mountPath)
+                                            }
+                                            let _ = self.restartEngine(name: mount.name)
+                                        }
+                                    } else if !isEngineRunning {
                                         await MainActor.run { let _ = self.restartEngine(name: mount.name) }
                                     }
                                 }

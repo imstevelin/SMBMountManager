@@ -2,57 +2,105 @@
 
 ![macOS 14.0+](https://img.shields.io/badge/macOS-14.0%2B-blue.svg)
 ![Swift 5](https://img.shields.io/badge/Swift-5.0-orange.svg)
-![Release 1.3.4](https://img.shields.io/badge/Release-1.3.4-brightgreen.svg)
+![Release 1.4.0](https://img.shields.io/badge/Release-1.4.0-brightgreen.svg)
 ![License MIT](https://img.shields.io/badge/License-MIT-green.svg)
 
-> **SMB 掛載管理器** 是一個專為 macOS 設計的強大開源常駐選單列工具。經過連續的版本迭代，全新的 **v1.3.4 版本** 帶來了革命性的 **斷點續傳上傳與下載雙向引擎**、**單調遞增防護的全局進度環**、深度整合 macOS 的 **Finder 專屬右鍵傳輸擴充套件**，以 Apple Liquid Glass UI 的絕美姿態，讓您的 NAS 傳輸效率與視覺享受達到前所未有的高度。
+> **SMB 掛載管理器** 是一個專為 macOS 設計的開源常駐選單列工具。它能自動管理多個 SMB/NAS 掛載點、提供多線程斷點續傳的雙向檔案傳輸、智慧網路環境偵測，並以 Apple Liquid Glass 設計語言打造極致美觀的操作介面。
 
-## 🌟 核心特色 (v1.3.4 視覺、操作與傳輸三重升級)
+---
 
-- **⚡ 雙向斷點續傳與 Finder 深度整合**：
-  - **右鍵一鍵傳輸**：選取路徑後，透過滑鼠右鍵「快速動作」選單即可直接呼叫「**SMB 專用下載**」或「**SMB 專用上傳**」，無縫發起多線程傳輸任務。
-  - **斷點接力續傳**：無論是更換 Wi-Fi 或是網路斷線，當伺服器重新連線或是 App 重啟時，所有傳輸中斷的任務都會**自動保存進度並接力續傳**，再大的檔案也不怕斷線。
-  - **智慧監控與高速並發**：利用 macOS 原生 FileHandle 與 Chunk 分頻寫入技術迴避 Kernel 死鎖，確保在極端高速 IO 下 SMB 依然流暢不卡死。
+## ✨ 核心功能
 
-- **✨ 全新 Apple Liquid Glass 視覺體驗**：
-  - **極致美學**：全面導入 Liquid Glass（液態玻璃）設計語言，包含半透明毛玻璃卡片、細膩的景深發光邊框、動畫光澤進度條。
-  - **完美的單一合併進度環**：精心設計的 **全局單調進度算法 (Monotonic Progress Manager)**，將同時進行的上傳與下載任務容量合併計算，徹底告別進度條「倒退走」或「反覆跳動」的突兀感，給您最絲滑唯美的進度圓環動畫。
+### 📁 SMB 掛載點管理
+- **多掛載點**：同時管理多個 NAS / SMB 伺服器的掛載連線
+- **開機自動掛載**：系統啟動後自動連接所有已設定的掛載點
+- **斷線自動重連**：持續監控掛載狀態，斷線後自動嘗試重新掛載
+- **休眠喚醒保護**：筆電合蓋 / 休眠後喚醒時，自動處理掛載點恢復與網路切換
+- **Keychain 整合**：帳號密碼安全儲存於 macOS 鑰匙圈，無需明碼保存
 
-- **🛡 筆電休眠喚醒防護 (Watchdog & Sleep Protection)**：
-  - 完美監聽系統休眠事件，在筆電闔上蓋子斷網前主動「切斷傳輸」並「暫停任務」，徹底解決 macOS Watchdog 誤殺與 Libdispatch 級別的死鎖崩潰問題。
+### ⚡ 多線程斷點續傳引擎
+- **下載加速**：4 線程並發 Chunk 分段下載，充分利用網路頻寬
+- **上傳引擎**：支援大檔案分段上傳，附帶進度追蹤與速度監控
+- **斷點續傳**：網路中斷或 App 重啟後，自動接續已下載 / 已上傳的進度
+- **Finder 右鍵整合**：在 Finder 中選取檔案，右鍵「快速動作」即可發起「SMB 專用下載」或「SMB 專用上傳」
+- **即時速度顯示**：EMA 平滑演算法確保速度與 ETA 顯示穩定不跳動
 
-- **🎯 幽靈卡死防護與網路環境限制**：
-  - 徹底解決 Finder 偷塞 `.DS_Store` 隱藏設定檔導致的假性佔用無限重連問題。
-  - 支援設定「僅在指定 Wi-Fi SSID 或實體網路線 (Ethernet)」下自動掛載，離開指定環境自動暫停並暫停所有收發任務，聰明節省資源。
+### 🌐 智慧網路管理
+- **Wi-Fi SSID 限制**：可設定掛載點僅在指定 Wi-Fi 環境下自動啟用
+- **乙太網路支援**：支援偵測有線網路連接，自動切換至最佳連線
+- **網路切換自適應**：Wi-Fi 與乙太網路切換時，自動重新建立 SMB 連線與傳輸任務
 
-## 📥 安裝與執行
+### 🎨 設計與體驗
+- **Liquid Glass 介面**：毛玻璃卡片、動態進度環、景深邊框等現代 macOS 設計語言
+- **選單列常駐**：不佔用 Dock 空間，在選單列即時顯示掛載數量與傳輸進度
+- **全局進度環**：合併計算所有傳輸任務的進度，於選單列以單一動畫圓環呈現
+- **系統通知整合**：傳輸完成、掛載成功 / 失敗等事件均有 macOS 原生通知提醒
 
-### 從 Release 下載安裝 (推薦)
-1. 前往本專案的 [Releases](https://github.com/imstevelin/smbmountmanager/releases) 頁面。
-2. 下載最新的 `SMB掛載管理器.zip` (v1.3.4)。
-3. 解壓縮後將 `SMB掛載管理器.app` 拖曳至您的「應用程式 (Applications)」資料夾。
-4. **推薦動作**：首次開啟時，進入「設定」> 點擊「安裝權限修復服務」，以獲得針對 `/Volumes` 資料夾的最高穩定性與權限修復。
+### 🔄 靜默自動更新
+- **背景自動更新**：勾選「啟動時自動檢查並更新」後，每次啟動時會背景檢查 GitHub 最新版本
+- **無感升級**：有新版本時自動下載、解壓縮、替換應用程式並重啟，全程使用者無需操作
+- **手動檢查**：也可隨時從選單手動觸發更新檢查
 
-### 開發者自行編譯
+---
+
+## 📥 安裝
+
+### 從 Release 下載（推薦）
+1. 前往 [Releases](https://github.com/imstevelin/SMBMountManager/releases) 頁面
+2. 下載最新的 `SMBMountManager-v1.4.0.zip`
+3. 解壓縮後將 `SMB掛載管理器.app` 拖入「應用程式」資料夾
+4. **推薦**：首次開啟後，進入「設定」>「安裝權限修復服務」以獲得最佳穩定性
+
+### 開發者編譯
 ```bash
-# 1. 複製專案
-git clone https://github.com/imstevelin/smbmountmanager.git
-cd smbmountmanager/swift
-
-# 2. 生成並開啟 Xcode 專案 (需安裝 xcodegen)
+git clone https://github.com/imstevelin/SMBMountManager.git
+cd SMBMountManager/swift
 xcodegen
 open SMBMountManager.xcodeproj
 ```
-* **環境要求**：macOS 14.0 或以上版本，Xcode 15 或以上版本。
+**環境要求**：macOS 14.0+、Xcode 15+
 
-## 🧠 專業架構與穩定性設計
+---
 
-* **檔案傳輸引擎 (ChunkDownloader/ChunkUploader)**：突破了傳統封包傳輸，藉助作業系統已經掛載的底層機制，直接操作 macOS 原生 `FileHandle`，實現低延遲、高吞吐量的斷點續傳。
-* **統一會話與進度管理 (TransferProgressManager)**：提前在 Finder 層級解析 `.fileSizeKey` 即時確立分母容量，配合 `activeSessionTaskIDs` 防跳躍鎖定，確保任何時刻都不會造成 UI 狀態撕裂。
-* **無阻塞架構**：網路偵測、掛載狀態輪詢、大量任務刪除等高開銷操作全數封裝至 `Task.detached`，徹底解放主執行緒 (MainActor)。
+## 🏗 專案架構
 
-## 🤝 貢獻與反饋
-我們非常歡迎任何形式的貢獻！如果您遇到 Bug，或是希望加入新功能，請開啟 **Issue** 或發起 **Pull Request**。
+```
+SMBMountManager/
+├── SMBMountManagerApp.swift        # App 入口、AppDelegate、TransferProgressManager
+├── Models/
+│   └── DownloadTaskModel.swift     # 下載任務資料結構
+├── Services/
+│   ├── MountEngine.swift           # SMB 掛載核心引擎 (mount/unmount)
+│   ├── MountManager.swift          # 掛載點狀態管理與自動重連
+│   ├── NetworkMonitorService.swift # 網路狀態監控 (Wi-Fi/Ethernet)
+│   ├── WiFiService.swift           # Wi-Fi SSID 偵測
+│   ├── KeychainService.swift       # macOS 鑰匙圈整合
+│   ├── NotificationService.swift   # 系統通知管理
+│   ├── UpdateService.swift         # GitHub Release 自動更新引擎
+│   ├── AppSettings.swift           # 使用者偏好設定
+│   ├── AppLogger.swift             # 統一日誌系統
+│   ├── LaunchdService.swift        # 開機自動啟動服務
+│   ├── Download/
+│   │   ├── DownloadManager.swift   # 下載任務佇列管理
+│   │   └── ChunkDownloader.swift   # 多線程分段下載器
+│   └── Upload/
+│       ├── UploadManager.swift     # 上傳任務佇列管理
+│       └── ChunkUploader.swift     # 多線程分段上傳器
+└── Views/
+    ├── MainSettingsView.swift      # 主設定介面 (掛載點、設定、關於)
+    ├── AddMountSheet.swift         # 新增/編輯掛載點表單
+    ├── MountDetailView.swift       # 掛載點詳細資訊
+    ├── DownloadManagerView.swift   # 下載任務管理頁面
+    ├── UploadManagerView.swift     # 上傳任務管理頁面
+    ├── StatusMenuView.swift        # 選單列下拉選單
+    ├── ConnectionTestView.swift    # 連線測試介面
+    └── FlowLayout.swift            # 自訂流式佈局元件
+```
 
-## 📄 授權協議
-本專案採用 **MIT License**。您可以自由地使用、修改與散佈此軟體，詳情請見 [LICENSE](LICENSE) 檔案。
+---
+
+## 🤝 貢獻
+歡迎提交 **Issue** 回報問題或 **Pull Request** 貢獻程式碼！
+
+## 📄 授權
+本專案採用 [MIT License](LICENSE)。

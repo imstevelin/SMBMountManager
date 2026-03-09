@@ -106,16 +106,15 @@ class ChunkDownloader {
         }
         
         do {
-            let writeHandle = try FileHandle(forUpdating: task.destinationURL)
-            defer { try? writeHandle.close() }
-            fcntl(writeHandle.fileDescriptor, F_NOCACHE, 1)
-            
+            // Multi-threaded download: each concurrent task gets its OWN independent
+            // read handle and write handle to avoid smbfs socket serialization.
             try await withThrowingTaskGroup(of: Void.self) { group in
                 var concurrentCount = 0
                 
                 for index in pendingChunkIndices {
                     if isPaused { break }
                     
+                    // Throttle concurrency
                     if concurrentCount >= maxConcurrentConnections {
                         try await group.next()
                         concurrentCount -= 1
@@ -124,14 +123,13 @@ class ChunkDownloader {
                     if isPaused { break }
                     
                     concurrentCount += 1
-                    group.addTask {
-                        try await self.downloadChunk(at: index, sourceURL: sourceURL, writeHandle: writeHandle)
+                    group.addTask { [self] in
+                        try await self.downloadChunk(at: index, sourceURL: sourceURL)
                     }
                 }
                 
-                while try await group.next() != nil {
-                    // completion
-                }
+                // Wait for all remaining
+                while try await group.next() != nil {}
             }
             
             if !isPaused {
@@ -144,16 +142,24 @@ class ChunkDownloader {
         }
     }
     
-    private func downloadChunk(at index: Int, sourceURL: URL, writeHandle: FileHandle) async throws {
+    /// Each chunk downloads using its OWN independent file handles.
+    /// This is critical for SMB: each read handle opens a separate smbfs session,
+    /// enabling true parallel throughput instead of serializing on a single socket.
+    private func downloadChunk(at index: Int, sourceURL: URL) async throws {
         let chunk = task.chunks[index]
         if chunk.isCompleted { return }
         
+        // Each concurrent task gets its own read handle (separate smbfs session)
         let readHandle = try FileHandle(forReadingFrom: sourceURL)
         defer { try? readHandle.close() }
         
-        // ** VITAL KERNEL BYPASS FOR SMB BLOAT **
-        // Prevent the Unified Buffer Cache (UBC) from filling up macOS RAM and kernel queues.
+        // Each concurrent task gets its own write handle
+        let writeHandle = try FileHandle(forWritingTo: task.destinationURL)
+        defer { try? writeHandle.close() }
+        
+        // Bypass kernel buffer cache to get real-time progress instead of cached bursts
         fcntl(readHandle.fileDescriptor, F_NOCACHE, 1)
+        fcntl(writeHandle.fileDescriptor, F_NOCACHE, 1)
         
         var currentOffset = chunk.startOffset + chunk.downloadedBytes
         let endOffset = chunk.startOffset + chunk.expectedSize
@@ -165,6 +171,7 @@ class ChunkDownloader {
             try readHandle.seek(toOffset: currentOffset)
             guard let data = try readHandle.read(upToCount: readSize), !data.isEmpty else { break }
             
+            // Write to the correct offset in the destination file (thread-safe via fileLock)
             fileLock.lock()
             try writeHandle.seek(toOffset: currentOffset)
             try writeHandle.write(contentsOf: data)
@@ -173,16 +180,18 @@ class ChunkDownloader {
             currentOffset += UInt64(data.count)
             let downloaded = currentOffset - chunk.startOffset
             
-            // Periodically flush local disk to avoid huge dirty pages cache building up locally
-            if currentOffset % (50 * 1024 * 1024) == 0 {
+            // Periodically sync to disk to prevent dirty page buildup
+            if downloaded % (10 * 1024 * 1024) == 0 {
                 fileLock.lock()
                 try? writeHandle.synchronize()
                 fileLock.unlock()
             }
             
+            // Update progress at most ~10 times per second to avoid UI thrashing
             let now = Date()
             taskLock.lock()
             self.task.chunks[index].downloadedBytes = downloaded
+            
             let shouldUpdate = now.timeIntervalSince(self.lastProgressUpdateTime) > 0.10 || currentOffset >= endOffset
             if shouldUpdate {
                 self.lastProgressUpdateTime = now
@@ -194,7 +203,7 @@ class ChunkDownloader {
                 self.onProgress(updatedTask)
             }
             
-            // Minimal yield
+            // Minimal yield to prevent starving the cooperative thread pool
             try? await Task.sleep(nanoseconds: 2_000_000)
         }
     }

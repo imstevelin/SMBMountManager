@@ -43,13 +43,15 @@ struct StatusMenuView: View {
 
         Menu {
             let allTasks = DownloadManager.shared.tasks
-            let activeTasksCount = allTasks.filter { $0.state == .downloading || $0.state == .waiting || $0.state == .paused }.count
+            let activeTasks = allTasks.filter { $0.state == .downloading || $0.state == .waiting || $0.state == .paused }
+            let activeTasksCount = activeTasks.count
             
             Text("序列中: \(activeTasksCount)")
                 .font(.callout)
             
-            let totalBytes = allTasks.reduce(0) { $0 + $1.totalBytes }
-            let downloadedBytes = allTasks.reduce(0) { $0 + ($1.state == .completed ? $1.totalBytes : $1.downloadedBytes) }
+            // Only count active tasks for progress (exclude completed/error tasks)
+            let totalBytes = activeTasks.reduce(UInt64(0)) { $0 + $1.totalBytes }
+            let downloadedBytes = activeTasks.reduce(UInt64(0)) { $0 + $1.downloadedBytes }
             let progress = totalBytes > 0 ? (Double(downloadedBytes) / Double(totalBytes)) * 100 : 0
             
             Text("下載進度: \(Int(progress))%")

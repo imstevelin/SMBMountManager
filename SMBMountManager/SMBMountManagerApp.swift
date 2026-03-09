@@ -75,6 +75,7 @@ class TransferProgressManager: ObservableObject {
     private var highestProgress: Double = 0.0
     private var lastTotalBytes: UInt64 = 0
     private var cancellables = Set<AnyCancellable>()
+    private var activityToken: NSObjectProtocol?
     
     private init() {
         Publishers.CombineLatest(DownloadManager.shared.$tasks, UploadManager.shared.$tasks)
@@ -95,6 +96,17 @@ class TransferProgressManager: ObservableObject {
         let isDownloading = dlTasks.contains { $0.state == .downloading }
         let isUploading = ulTasks.contains { $0.state == .uploading }
         let currentIsActive = isDownloading || isUploading
+        
+        // Anti-App Nap: Prevent macOS from completely stopping the main thread UI updates when the mouse is idle.
+        if currentIsActive && activityToken == nil {
+            activityToken = ProcessInfo.processInfo.beginActivity(
+                options: [.userInitiatedAllowingIdleSystemSleep, .latencyCritical],
+                reason: "Active network transfer requiring UI updates"
+            )
+        } else if !currentIsActive, let token = activityToken {
+            ProcessInfo.processInfo.endActivity(token)
+            activityToken = nil
+        }
         
         let isDlPaused = !isDownloading && sessionDLTasks.contains { $0.state == .paused }
         let isUlPaused = !isUploading && sessionULTasks.contains { $0.state == .paused }
@@ -117,13 +129,10 @@ class TransferProgressManager: ObservableObject {
             
             // Core logic: Enforce strictly monotonic progress (never decreasing)
             if totalBytes > lastTotalBytes {
-                // Denominator increased (e.g. new files added). Safe to drop progress percentage to represent the new combined pool.
                 highestProgress = rawProgress
             } else if totalBytes < lastTotalBytes {
-                // Denominator shrank (e.g. user cleared completed errors or paused tasks from the UI). Allow recalculation.
                 highestProgress = rawProgress
             } else {
-                // Typical state: Total bytes remains constant. We guarantee progress ONLY moves forward.
                 if rawProgress > highestProgress {
                     highestProgress = rawProgress
                 }
@@ -152,6 +161,8 @@ struct MenuBarLabel: View {
     @ObservedObject var settings: AppSettings
     @StateObject private var progressManager = TransferProgressManager.shared
 
+    @Environment(\.openWindow) private var openWindow
+
     var body: some View {
         HStack(spacing: 3) {
             if progressManager.hasSessionTasks {
@@ -174,6 +185,10 @@ struct MenuBarLabel: View {
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
                 }
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenMainWindow"))) { _ in
+            NSApp.activate(ignoringOtherApps: true)
+            openWindow(id: "settings")
         }
     }
 }
@@ -413,7 +428,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         NotificationService.requestPermission()
         
         if AppSettings.shared.autoCheckUpdates {
-            UpdateService.shared.checkForUpdates(manual: false)
+            UpdateService.shared.checkForUpdates(silent: true)
         }
         
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(macDidSleep), name: NSWorkspace.willSleepNotification, object: nil)
@@ -430,6 +445,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         Task { @MainActor in
             DownloadManager.shared.pauseAll()
             UploadManager.shared.cancelAllAndShutdown()
+            
+            // Stop engines to prevent them from trying to reconnect during network teardown
+            AppLifecycle.shared.mountManager?.stopAll()
+            
+            // VITAL: Aggressively and synchronously force-unmount all SMB shares BEFORE the system fully sleeps.
+            // This prevents the kernel `mount_smbfs` daemon from deadlocking if the Mac wakes up on a different Wi-Fi network.
+            // Using `unmountAllAndStopSync()` which calls `diskutil unmount force` blindly.
+            AppLifecycle.shared.mountManager?.unmountAllAndStopSync()
         }
     }
     
@@ -437,11 +460,26 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         AppLifecycle.shared.isSleeping = false
         AppLifecycle.shared.lastWakeTime = Date()
         
+        // Clear coalesced queues to stop pre-sleep notifications from exploding post-wake
+        NotificationService.clearPendingEvents()
+        
         // Let's also proactively clear recent notifications on wake to start fresh
         UNUserNotificationCenter.current().removeAllDeliveredNotifications()
         
+        // Step 1: Forcefully wipe any "ghost mounts" that might have snuck in or survived.
+        // Doing this before starting the network ensures a clean slate.
         Task { @MainActor in
+            AppLifecycle.shared.mountManager?.unmountAllAndStopSync()
+        }
+        
+        // Step 2: Restart engines and downloads with a delay.
+        // The Mac network stack takes a moment to establish routing on the new Wi-Fi network.
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds delay
+            
+            AppLifecycle.shared.mountManager?.startAll()
             DownloadManager.shared.startAll()
+            
             // Note: Upload tasks are NOT resumed here blindly.
             // They will auto-resume per-mount when MountEngine confirms mounts are online.
         }
@@ -457,6 +495,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
+        
+        let id = response.notification.request.identifier
+        
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: NSNotification.Name("OpenMainWindow"), object: nil)
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                if id.starts(with: "dl_") {
+                    NotificationCenter.default.post(name: NSNotification.Name("OpenDownloadsTab"), object: nil)
+                } else if id.starts(with: "ul_") {
+                    NotificationCenter.default.post(name: NSNotification.Name("OpenUploadsTab"), object: nil)
+                } else {
+                    NotificationCenter.default.post(name: NSNotification.Name("OpenMountsTab"), object: nil)
+                }
+            }
+        }
+        
         completionHandler()
     }
 

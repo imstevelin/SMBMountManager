@@ -17,10 +17,16 @@ class UploadManager: ObservableObject {
     
     // Upload speed tracking — Exponential Moving Average (EMA) for smooth display
     @Published var currentSpeedBytesPerSecond: Int64 = 0
+    @Published var currentETASpeedBytesPerSecond: Int64 = 0 // Slower EMA specifically for ETA calculation
     private var lastTotalBytesUploaded: UInt64 = 0
     private var speedTimer: Timer?
     private var emaSpeed: Double = 0.0
+    private var etaEmaSpeed: Double = 0.0
     private let emaSmoothingFactor: Double = 0.3  // α: higher = more responsive, lower = smoother
+    private let etaSmoothingFactor: Double = 0.02  // Much slower α for a stable ETA that represents the last ~50 seconds
+    private let emaWarmUpFactor: Double = 0.5       // α for the first N samples (fast ramp)
+    private var emaSampleCount: Int = 0             // Number of samples since last reset
+    private let emaWarmUpSamples: Int = 5           // Use warm-up α for this many samples
     private var lastSpeedSampleTime: Date = Date()
     
     /// Tracks the tasks involved in the current active upload session to prevent progress percentage jumps.
@@ -41,7 +47,7 @@ class UploadManager: ObservableObject {
         lastSpeedSampleTime = Date()
         lastTotalBytesUploaded = tasks.reduce(UInt64(0)) { $0 + $1.uploadedBytes }
         
-        speedTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self = self else { return }
                 let now = Date()
@@ -58,23 +64,48 @@ class UploadManager: ObservableObject {
                         : 0.0
                     let instantSpeed = bytesDelta / elapsed
                     
+                    // Use warm-up factor for the first N samples for fast convergence
+                    let alpha = self.emaSampleCount < self.emaWarmUpSamples ? self.emaWarmUpFactor : self.emaSmoothingFactor
+                    // ETA also needs warm-up so it converges quickly after restart
+                    let etaAlpha = self.emaSampleCount < self.emaWarmUpSamples ? 0.3 : self.etaSmoothingFactor
+                    
                     if self.emaSpeed == 0 && instantSpeed > 0 {
                         self.emaSpeed = instantSpeed
+                        self.etaEmaSpeed = instantSpeed
                     } else {
-                        self.emaSpeed = self.emaSmoothingFactor * instantSpeed + (1.0 - self.emaSmoothingFactor) * self.emaSpeed
+                        self.emaSpeed = alpha * instantSpeed + (1.0 - alpha) * self.emaSpeed
+                        self.etaEmaSpeed = etaAlpha * instantSpeed + (1.0 - etaAlpha) * self.etaEmaSpeed
                     }
+                    self.emaSampleCount += 1
                     self.currentSpeedBytesPerSecond = Int64(self.emaSpeed)
+                    
+                    // Clamp ETA speed to stay within a reasonable range of the live speed.
+                    if self.etaEmaSpeed > 0 && self.emaSpeed > 0 && self.etaEmaSpeed < self.emaSpeed * 0.3 {
+                         self.etaEmaSpeed = self.emaSpeed * 0.5
+                    }
+                    if self.etaEmaSpeed > 0 && self.emaSpeed > 0 && self.etaEmaSpeed > self.emaSpeed * 3.0 {
+                         self.etaEmaSpeed = self.emaSpeed * 2.0
+                    }
+                    self.currentETASpeedBytesPerSecond = Int64(self.etaEmaSpeed)
+                    
                 } else {
                     self.emaSpeed *= 0.4
+                    self.etaEmaSpeed *= 0.4
                     if self.emaSpeed < 1024 {
                         self.emaSpeed = 0
+                        self.etaEmaSpeed = 0
                     }
                     self.currentSpeedBytesPerSecond = Int64(self.emaSpeed)
+                    self.currentETASpeedBytesPerSecond = Int64(self.etaEmaSpeed)
+                    // Reset sample count so next upload session gets warm-up
+                    self.emaSampleCount = 0
                 }
                 
                 self.lastTotalBytesUploaded = currentTotal
             }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        speedTimer = timer
     }
     
     private func loadTasks() {
@@ -383,12 +414,9 @@ class UploadManager: ObservableObject {
                 NotificationCenter.default.post(name: NSNotification.Name("UploadTaskCompleted"), object: nil, userInfo: ["fileName": tasks[index].sourceURL.lastPathComponent])
             } else if finalState == .error {
                 AppLogger.shared.error("[UploadManager] Task failed: \(tasks[index].sourceURL.lastPathComponent)")
-                // User requested to explicitly delete `.smbupload` upon failure.
-                if let mount = AppLifecycle.shared.mountManager?.mounts.first(where: { $0.id == tasks[index].mountId }) {
-                    let destURL = URL(fileURLWithPath: mount.mountPath).appendingPathComponent(tasks[index].relativeSMBPath)
-                    let uploadURL = destURL.appendingPathExtension("smbupload")
-                    try? FileManager.default.removeItem(at: uploadURL)
-                }
+                // Note: We deliberately DO NOT remove `.smbupload` upon error.
+                // Keeping the `.smbupload` file allows the backend engine to auto-resume
+                // from the last acknowledged byte when the network reconnects.
             }
         }
         

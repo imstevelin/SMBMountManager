@@ -3,6 +3,7 @@ import SwiftUI
 struct DownloadManagerView: View {
     @StateObject private var downloadManager = DownloadManager.shared
     @State private var selectedTab: DownloadTab = .active
+    @State private var refreshTick: UInt = 0
 
     enum DownloadTab: String, CaseIterable, Identifiable {
         case active = "處理中"
@@ -105,11 +106,20 @@ struct DownloadManagerView: View {
                     LazyVStack(spacing: 10) {
                         ForEach(filteredTasks) { task in
                             DownloadTaskRow(task: task)
+                                .id("\(task.id)-\(refreshTick)")
                         }
                     }
                     .padding(.horizontal, 24)
                     .padding(.vertical, 8)
                 }
+            }
+        }
+        .onReceive(Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()) { _ in
+            // Force SwiftUI to re-render by mutating @State.
+            // An empty .onReceive is optimized away by SwiftUI since no state changes.
+            if downloadManager.tasks.contains(where: { $0.state == .downloading || $0.state == .waiting }) {
+                refreshTick &+= 1
+                downloadManager.objectWillChange.send()
             }
         }
     }
@@ -231,6 +241,23 @@ struct DownloadTaskRow: View {
                                     .font(.caption2)
                                     .foregroundStyle(.red)
                                     .lineLimit(1)
+                            } else if task.state == .downloading {
+                                HStack(spacing: 8) {
+                                    if manager.currentSpeedBytesPerSecond > 0 {
+                                        Text(formatSpeed(manager.currentSpeedBytesPerSecond))
+                                            .font(.system(.caption, design: .monospaced))
+                                            .foregroundStyle(.secondary)
+                                        
+                                        let remaining = task.totalBytes > task.downloadedBytes ? task.totalBytes - task.downloadedBytes : 0
+                                        let secondsLeft = Double(remaining) / Double(manager.currentETASpeedBytesPerSecond)
+                                        Text(formatTime(secondsLeft))
+                                            .font(.system(.caption, design: .monospaced))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Text("\(Int(task.progress * 100))%")
+                                        .font(.system(.caption, design: .monospaced).weight(.medium))
+                                        .foregroundStyle(statusColor)
+                                }
                             } else {
                                 Text("\(Int(task.progress * 100))%")
                                     .font(.system(.caption, design: .monospaced).weight(.medium))
@@ -339,5 +366,23 @@ struct DownloadTaskRow: View {
         formatter.allowedUnits = [.useAll]
         formatter.countStyle = .file
         return formatter.string(fromByteCount: Int64(bytes))
+    }
+
+    private func formatSpeed(_ bytesPerSecond: Int64) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useAll]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: bytesPerSecond) + "/s"
+    }
+    
+    private func formatTime(_ seconds: Double) -> String {
+        if seconds <= 0 || seconds.isNaN || seconds.isInfinite { return "計算中..." }
+        if seconds < 60 {
+            return "\(Int(seconds)) 秒"
+        } else if seconds < 3600 {
+            return "\(Int(seconds/60)) 分鐘"
+        } else {
+            return String(format: "%.1f 小時", seconds/3600)
+        }
     }
 }

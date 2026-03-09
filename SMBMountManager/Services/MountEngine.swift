@@ -75,31 +75,47 @@ actor MountEngine {
 
             // Prevent duplicate ghost mounts on wake-from-sleep: ensure target path is fully clear before any new mount attempt
             let targetPath = mount.mountPath
-            let isOccupied = await withTaskGroup(of: Bool?.self) { group in
-                group.addTask {
-                    let fm = FileManager.default
-                    if fm.fileExists(atPath: targetPath) {
-                        let contents = (try? fm.contentsOfDirectory(atPath: targetPath)) ?? []
-                        let filteredContents = contents.filter { $0 != ".DS_Store" }
-                        
-                        // If it only contained .DS_Store, it is not truly occupied.
-                        // We actively wipe the ghost folder to provide a clean slate for the mount command.
-                        if filteredContents.isEmpty && !contents.isEmpty {
-                            try? fm.removeItem(atPath: targetPath)
-                        }
-                        
-                        return !filteredContents.isEmpty
+            
+            // Use Process to check directory contents safely to avoid Swift Concurrency / FileManager kernel deadlocks on stale mounts
+            let isOccupied: Bool = await {
+                let task = Process()
+                task.launchPath = "/bin/bash"
+                // Returns 0 if directory exists and NOT empty (excluding .DS_Store), else non-zero
+                // If it finds only .DS_Store, it deletes it and the directory.
+                task.arguments = ["-c", """
+                if [ -d "\(targetPath)" ]; then
+                    FILES=$(ls -A "\(targetPath)" 2>/dev/null | grep -v '^\\.DS_Store$')
+                    if [ -z "$FILES" ]; then
+                        rm -rf "\(targetPath)" 2>/dev/null
+                        exit 1
+                    else
+                        exit 0
+                    fi
+                else
+                    exit 1
+                fi
+                """]
+                task.standardOutput = FileHandle.nullDevice
+                task.standardError = FileHandle.nullDevice
+
+                var didTimeout = false
+                do {
+                    try task.run()
+                    let deadline = Date().addingTimeInterval(2.0)
+                    while task.isRunning && Date() < deadline {
+                        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s
                     }
+                    if task.isRunning {
+                        task.terminate()
+                        didTimeout = true
+                    }
+                } catch {
                     return false
                 }
-                group.addTask {
-                    try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 sec timeout
-                    return nil
-                }
-                let result = await group.next() ?? nil
-                group.cancelAll()
-                return result ?? true // If timeout, assume occupied to avoid infinite hangs
-            }
+                
+                if didTimeout { return true } // Assume occupied if OS hangs
+                return task.terminationStatus == 0
+            }()
 
             if isOccupied {
                 log("[WARN] Mount path \(targetPath) is occupied by a stale session. Attempting OS cleanup...")
