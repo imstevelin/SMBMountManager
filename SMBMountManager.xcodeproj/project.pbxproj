@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 A1B2C3D4E5F6000200000001 /* AppStateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6000100000001 /* AppStateManager.swift */; };
 A1B2C3D4E5F6000400000001 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6000300000001 /* OnboardingView.swift */; };
+A1B2C3D4E5F6000600000001 /* UpdateAuthorizationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6000500000001 /* UpdateAuthorizationView.swift */; };
 		14DDD5E03CC93CED970ED99E /* UploadManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 741B05407CDA8F143A501680 /* UploadManager.swift */; };
 		1524674B069F462F8ED4A727 /* MountEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2BE2E966357301663AF2E6 /* MountEngine.swift */; };
 		1864D93C8B48D3F61D7DBC07 /* MountManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C344C0B09CC2F559CD2E7917 /* MountManager.swift */; };
@@ -42,6 +43,7 @@ A1B2C3D4E5F6000400000001 /* OnboardingView.swift in Sources */ = {isa = PBXBuild
 /* Begin PBXFileReference section */
 A1B2C3D4E5F6000100000001 /* AppStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMBMountManager/Services/AppStateManager.swift; sourceTree = SOURCE_ROOT; };
 A1B2C3D4E5F6000300000001 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMBMountManager/Views/OnboardingView.swift; sourceTree = SOURCE_ROOT; };
+A1B2C3D4E5F6000500000001 /* UpdateAuthorizationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMBMountManager/Views/UpdateAuthorizationView.swift; sourceTree = SOURCE_ROOT; };
 		01A0C3DE84B1D8FD82683AEF /* MountDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MountDetailView.swift; sourceTree = "<group>"; };
 		0CCE1B567F604E6FDD287972 /* DownloadTaskModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadTaskModel.swift; sourceTree = "<group>"; };
 		12E60CC529F45EE3D4866AB9 /* ChunkUploader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChunkUploader.swift; sourceTree = "<group>"; };
@@ -245,6 +247,7 @@ A1B2C3D4E5F6000300000001 /* OnboardingView.swift */ = {isa = PBXFileReference; l
 			files = (
 				A1B2C3D4E5F6000200000001 /* AppStateManager.swift in Sources */,
 				A1B2C3D4E5F6000400000001 /* OnboardingView.swift in Sources */,
+				A1B2C3D4E5F6000600000001 /* UpdateAuthorizationView.swift in Sources */,
 				D679095C78C97DEE12465AA4 /* AddMountSheet.swift in Sources */,
 				B7CB8FFA445C91FC6EB4EF4A /* AppLogger.swift in Sources */,
 				ECA60DDE60CB3868ED2A2146 /* AppSettings.swift in Sources */,

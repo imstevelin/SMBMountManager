@@ -52,71 +52,9 @@ struct SMBMountManagerApp: App {
                     .environmentObject(appState)
                     .frame(width: 700, height: 600)
             } else if appState.needsUpdateAuthorization {
-                let mountCount = max(mountManager.mounts.count, 1)
-                VStack(spacing: 0) {
-                    Spacer()
-
-                    // App icon
-                    if let appIcon = NSApplication.shared.applicationIconImage {
-                        Image(nsImage: appIcon)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 96, height: 96)
-                    }
-
-                    Text("SMB 掛載管理器已更新 🎉")
-                        .font(.system(size: 22, weight: .bold))
-                        .padding(.top, 16)
-
-                    Text("由於核心模組升級，需要重新驗證 Keychain 密碼存取權限。\n點擊下方按鈕後，系統將彈出 **\(mountCount)** 次密碼驗證框，\n請輸入「電腦登入密碼」並選擇「**永遠允許**」。")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .lineSpacing(4)
-                        .padding(.top, 10)
-                        .padding(.horizontal, 40)
-
-                    // Tip card
-                    HStack(spacing: 10) {
-                        Image(systemName: "info.circle.fill")
-                            .foregroundStyle(.blue)
-                            .font(.system(size: 16))
-                        Text("完成驗證後，背景掛載服務將自動啟動。")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(12)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
-                    .glassEffect(.regular, in: .rect(cornerRadius: 10))
-                    .padding(.top, 16)
-
-                    Button(action: {
-                        KeychainService.allowUI = true
-                        
-                        Task {
-                            for mount in mountManager.mounts {
-                                let _ = KeychainService.getPassword(forMount: mount.name, username: mount.username)
-                            }
-                            
-                            await MainActor.run {
-                                appState.completeUpdateAuthorization()
-                                checkAndTransitionToSettings()
-                                mountManager.startAll()
-                            }
-                        }
-                    }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "arrow.triangle.2.circlepath")
-                            Text("重新驗證")
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .padding(.top, 20)
-
-                    Spacer()
+                UpdateAuthorizationView(mountManager: mountManager, appState: appState) {
+                    checkAndTransitionToSettings()
                 }
-                .frame(width: 480, height: 420)
             } else if appState.needsErrorAuthorization {
                 VStack(spacing: 0) {
                     Spacer()
