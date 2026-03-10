@@ -13,6 +13,8 @@ struct UpdateAuthorizationView: View {
 
     @State private var isProcessing = false
 
+    private var mountCount: Int { max(mountManager.mounts.count, 1) }
+
     var body: some View {
         VStack(spacing: 0) {
             Spacer()
@@ -49,7 +51,7 @@ struct UpdateAuthorizationView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Keychain 密碼驗證")
                             .font(.system(size: 13, weight: .semibold))
-                        Text("若系統要求輸入電腦密碼，請選擇「永遠允許」。")
+                        Text("系統將彈出 \(mountCount) 次密碼驗證框，請選擇「永遠允許」。")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                     }
@@ -147,12 +149,13 @@ struct UpdateAuthorizationView: View {
             // Brief delay to allow the location dialog to appear and be dismissed
             try? await Task.sleep(nanoseconds: 500_000_000)
 
-            // Step 3: Complete and proceed
+            // Step 3: Complete and proceed, bring app to front
             await MainActor.run {
                 isProcessing = false
                 appState.completeUpdateAuthorization()
                 mountManager.startAll()
                 onComplete()
+                NSApp.activate(ignoringOtherApps: true)
             }
         }
     }
