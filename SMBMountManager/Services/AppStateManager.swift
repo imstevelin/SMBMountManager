@@ -33,10 +33,19 @@ class AppStateManager: ObservableObject {
     private func checkAppVersion() {
         let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
         let lastVersion = UserDefaults.standard.string(forKey: lastLaunchedVersionKey)
+        let hasExistingMounts = !MountPoint.loadAll().isEmpty
         
         if lastVersion == nil {
-            // First time ever launching the app → show onboarding
-            needsOnboarding = true
+            if hasExistingMounts {
+                // User has existing configurations but no lastVersion recorded.
+                // This means they are upgrading from a very old version (< 1.4.0) or their defaults were wiped.
+                // Treat this as an upgrade from a pre-onboarding version.
+                needsUpdateAuthorization = true
+                needsOnboardingAfterUpdate = true
+            } else {
+                // First time ever launching the app → show onboarding
+                needsOnboarding = true
+            }
         } else if let last = lastVersion, last.compare(currentVersion, options: .numeric) == .orderedAscending {
             // App was updated since last launch → always show update auth for Keychain re-authorization
             needsUpdateAuthorization = true

@@ -68,7 +68,7 @@ struct SMBMountManagerApp: App {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 40)
                     
-                    Button("開始授權") {
+                    Button("重新驗證") {
                         KeychainService.allowUI = true
                         
                         Task {
