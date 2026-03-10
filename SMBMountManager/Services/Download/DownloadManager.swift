@@ -1,6 +1,13 @@
 import Foundation
 import Combine
 
+struct SpeedTracker {
+    var emaSpeed: Double = 0.0
+    var etaEmaSpeed: Double = 0.0
+    var emaSampleCount: Int = 0
+    var lastBytes: UInt64 = 0
+}
+
 @MainActor
 class DownloadManager: ObservableObject {
     static let shared = DownloadManager()
@@ -15,17 +22,17 @@ class DownloadManager: ObservableObject {
     private var downloaders: [UUID: ChunkDownloader] = [:]
     private var isPausingAll: Bool = false
     
-    // Download speed tracking — Exponential Moving Average (EMA) for smooth display
+    // Global and Per-Task Speed Tracking
     @Published var currentSpeedBytesPerSecond: Int64 = 0
-    @Published var currentETASpeedBytesPerSecond: Int64 = 0 // Slower EMA specifically for ETA calculation
-    private var lastTotalBytesDownloaded: UInt64 = 0
+    @Published var taskSpeeds: [UUID: Int64] = [:]
+    @Published var taskETASpeeds: [UUID: Int64] = [:]
+    
+    private var speedTrackers: [UUID: SpeedTracker] = [:]
     private var speedTimer: Timer?
-    private var emaSpeed: Double = 0.0
-    private var etaEmaSpeed: Double = 0.0
+    
     private let emaSmoothingFactor: Double = 0.15  // α: lower = smoother, less spiky
     private let etaSmoothingFactor: Double = 0.02  // Much slower α for a stable ETA that represents the last ~50 seconds
     private let emaWarmUpFactor: Double = 0.5       // α for the first N samples (fast ramp)
-    private var emaSampleCount: Int = 0             // Number of samples since last reset
     private let emaWarmUpSamples: Int = 5           // Use warm-up α for this many samples
     private var lastSpeedSampleTime: Date = Date()
     
@@ -43,20 +50,18 @@ class DownloadManager: ObservableObject {
     }
     
     /// Reset speed tracking state. Call when downloads start or resume for instant accurate readings.
-    func resetSpeedTracking() {
-        emaSpeed = 0.0
-        etaEmaSpeed = 0.0
-        emaSampleCount = 0
-        currentSpeedBytesPerSecond = 0
-        currentETASpeedBytesPerSecond = 0
-        lastTotalBytesDownloaded = tasks.reduce(UInt64(0)) { $0 + $1.downloadedBytes }
-        lastSpeedSampleTime = Date()
-    }
+    // (Removed resetSpeedTracking as trackers self-manage via the timer loop)
     
     private func startSpeedMeasurement() {
         speedTimer?.invalidate()
         lastSpeedSampleTime = Date()
-        lastTotalBytesDownloaded = tasks.reduce(UInt64(0)) { $0 + $1.downloadedBytes }
+        
+        // Ensure trackers exist for currently downloading tasks
+        for task in tasks where task.state == .downloading {
+            if speedTrackers[task.id] == nil {
+                speedTrackers[task.id] = SpeedTracker(lastBytes: task.downloadedBytes)
+            }
+        }
         
         // Sample every 1 second for stable byte deltas
         let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
@@ -67,62 +72,66 @@ class DownloadManager: ObservableObject {
                 guard elapsed > 0.1 else { return }
                 self.lastSpeedSampleTime = now
                 
-                let currentTotal = self.tasks.reduce(UInt64(0)) { $0 + $1.downloadedBytes }
-                let isDownloading = self.tasks.contains { $0.state == .downloading }
+                var totalGlobalSpeed: Int64 = 0
+                var activeTaskIds = Set<UUID>()
                 
-                if isDownloading {
-                    let bytesDelta = currentTotal >= self.lastTotalBytesDownloaded
-                        ? Double(currentTotal - self.lastTotalBytesDownloaded)
-                        : 0.0
-                    var instantSpeed = bytesDelta / elapsed
-                    
-                    // Spike clamp: if the instantaneous reading is >5x the current EMA,
-                    // it's likely a kernel buffer flush burst, not real sustained throughput.
-                    if self.emaSpeed > 0 && instantSpeed > self.emaSpeed * 5.0 {
-                        instantSpeed = self.emaSpeed * 1.5
+                for task in self.tasks {
+                    if task.state == .downloading {
+                        activeTaskIds.insert(task.id)
+                        var tracker = self.speedTrackers[task.id] ?? SpeedTracker(lastBytes: task.downloadedBytes)
+                        
+                        let bytesDelta = task.downloadedBytes >= tracker.lastBytes
+                            ? Double(task.downloadedBytes - tracker.lastBytes)
+                            : 0.0
+                        var instantSpeed = bytesDelta / elapsed
+                        
+                        // Spike clamp
+                        if tracker.emaSpeed > 0 && instantSpeed > tracker.emaSpeed * 5.0 {
+                            instantSpeed = tracker.emaSpeed * 1.5
+                        }
+                        
+                        let alpha = tracker.emaSampleCount < self.emaWarmUpSamples ? self.emaWarmUpFactor : self.emaSmoothingFactor
+                        let etaAlpha = tracker.emaSampleCount < self.emaWarmUpSamples ? 0.3 : self.etaSmoothingFactor
+                        
+                        if tracker.emaSpeed == 0 && instantSpeed > 0 {
+                            tracker.emaSpeed = instantSpeed
+                            tracker.etaEmaSpeed = instantSpeed
+                        } else {
+                            tracker.emaSpeed = alpha * instantSpeed + (1.0 - alpha) * tracker.emaSpeed
+                            tracker.etaEmaSpeed = etaAlpha * instantSpeed + (1.0 - etaAlpha) * tracker.etaEmaSpeed
+                        }
+                        
+                        tracker.emaSampleCount += 1
+                        
+                        // Bounds clamp
+                        if tracker.etaEmaSpeed > 0 && tracker.emaSpeed > 0 {
+                            if tracker.etaEmaSpeed < tracker.emaSpeed * 0.3 {
+                                tracker.etaEmaSpeed = tracker.emaSpeed * 0.5
+                            } else if tracker.etaEmaSpeed > tracker.emaSpeed * 3.0 {
+                                tracker.etaEmaSpeed = tracker.emaSpeed * 2.0
+                            }
+                        }
+                        
+                        tracker.lastBytes = task.downloadedBytes
+                        self.speedTrackers[task.id] = tracker
+                        
+                        let currentTaskSpeed = Int64(tracker.emaSpeed)
+                        self.taskSpeeds[task.id] = currentTaskSpeed
+                        self.taskETASpeeds[task.id] = Int64(tracker.etaEmaSpeed)
+                        
+                        totalGlobalSpeed += currentTaskSpeed
                     }
-                    
-                    // Use warm-up factor for the first N samples for fast convergence
-                    let alpha = self.emaSampleCount < self.emaWarmUpSamples ? self.emaWarmUpFactor : self.emaSmoothingFactor
-                    // ETA also needs warm-up so it converges quickly after restart instead of
-                    // being stuck on an inflated first sample for ~50 seconds.
-                    let etaAlpha = self.emaSampleCount < self.emaWarmUpSamples ? 0.3 : self.etaSmoothingFactor
-                    
-                    if self.emaSpeed == 0 && instantSpeed > 0 {
-                        self.emaSpeed = instantSpeed
-                        self.etaEmaSpeed = instantSpeed
-                    } else {
-                        self.emaSpeed = alpha * instantSpeed + (1.0 - alpha) * self.emaSpeed
-                        self.etaEmaSpeed = etaAlpha * instantSpeed + (1.0 - etaAlpha) * self.etaEmaSpeed
-                    }
-                    self.emaSampleCount += 1
-                    self.currentSpeedBytesPerSecond = Int64(self.emaSpeed)
-                    
-                    // Clamp ETA speed to stay within a reasonable range of the live speed.
-                    // Lower bound: don't let ETA speed lag too far below (prevents absurdly long ETAs)
-                    if self.etaEmaSpeed > 0 && self.emaSpeed > 0 && self.etaEmaSpeed < self.emaSpeed * 0.3 {
-                         self.etaEmaSpeed = self.emaSpeed * 0.5
-                    }
-                    // Upper bound: don't let ETA speed stay too far above (prevents absurdly short ETAs)
-                    if self.etaEmaSpeed > 0 && self.emaSpeed > 0 && self.etaEmaSpeed > self.emaSpeed * 3.0 {
-                         self.etaEmaSpeed = self.emaSpeed * 2.0
-                    }
-                    self.currentETASpeedBytesPerSecond = Int64(self.etaEmaSpeed)
-                    
-                } else {
-                    self.emaSpeed *= 0.4
-                    self.etaEmaSpeed *= 0.4
-                    if self.emaSpeed < 1024 {
-                        self.emaSpeed = 0
-                        self.etaEmaSpeed = 0
-                    }
-                    self.currentSpeedBytesPerSecond = Int64(self.emaSpeed)
-                    self.currentETASpeedBytesPerSecond = Int64(self.etaEmaSpeed)
-                    // Reset sample count so next download session gets warm-up
-                    self.emaSampleCount = 0
                 }
                 
-                self.lastTotalBytesDownloaded = currentTotal
+                // Cleanup trackers for non-downloading tasks
+                let toRemove = self.speedTrackers.keys.filter { !activeTaskIds.contains($0) }
+                for id in toRemove {
+                    self.speedTrackers.removeValue(forKey: id)
+                    self.taskSpeeds.removeValue(forKey: id)
+                    self.taskETASpeeds.removeValue(forKey: id)
+                }
+                
+                self.currentSpeedBytesPerSecond = totalGlobalSpeed
             }
         }
         RunLoop.main.add(timer, forMode: .common)
@@ -225,9 +234,6 @@ class DownloadManager: ObservableObject {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
         tasks[index].state = .downloading
         AppLogger.shared.info("[DownloadManager] Started downloading: \(tasks[index].fileName)")
-        
-        // Reset EMA so speed ramps up quickly from this fresh start
-        resetSpeedTracking()
         
         let taskModel = tasks[index] // It already does this!
         let downloader = ChunkDownloader(task: taskModel) { [weak self] updatedTask in

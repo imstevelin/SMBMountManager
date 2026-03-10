@@ -245,16 +245,21 @@ struct UploadTaskRow: View {
                                     .lineLimit(1)
                             } else if task.state == .uploading {
                                 HStack(spacing: 8) {
-                                    if manager.currentSpeedBytesPerSecond > 0 {
-                                        Text(formatSpeed(manager.currentSpeedBytesPerSecond))
+                                    let taskSpeed = manager.taskSpeeds[task.id] ?? 0
+                                    let taskETASpeed = manager.taskETASpeeds[task.id] ?? 0
+                                    
+                                    if taskSpeed > 0 {
+                                        Text(formatSpeed(taskSpeed))
                                             .font(.system(.caption, design: .monospaced))
                                             .foregroundStyle(.secondary)
                                         
                                         let remaining = task.totalBytes > task.uploadedBytes ? task.totalBytes - task.uploadedBytes : 0
-                                        let secondsLeft = Double(remaining) / Double(manager.currentETASpeedBytesPerSecond)
-                                        Text(formatTime(secondsLeft))
-                                            .font(.system(.caption, design: .monospaced))
-                                            .foregroundStyle(.secondary)
+                                        if taskETASpeed > 0 {
+                                            let secondsLeft = Double(remaining) / Double(taskETASpeed)
+                                            Text(formatTime(secondsLeft))
+                                                .font(.system(.caption, design: .monospaced))
+                                                .foregroundStyle(.secondary)
+                                        }
                                     }
                                     Text("\(Int(task.progress * 100))%")
                                         .font(.system(.caption, design: .monospaced).weight(.medium))

@@ -41,6 +41,7 @@ struct MainSettingsView: View {
     @ObservedObject var mountManager: MountManager
     @ObservedObject var networkMonitor: NetworkMonitorService
     @EnvironmentObject var settings: AppSettings
+    @Environment(\.openWindow) private var openWindow
 
     @State private var selectedTab = 0
     @State private var showAddSheet = false
@@ -49,11 +50,12 @@ struct MainSettingsView: View {
     @State private var showAlert = false
     @State private var alertTitle = ""
     @State private var alertMessage = ""
+    @State private var isFixerInstalled = LaunchdService.fixerInstalled
 
     var body: some View {
         TabView(selection: $selectedTab) {
             // Tab 1: Mount Points
-            MountsTabView(mountManager: mountManager, showAddSheet: $showAddSheet, editingMount: $editingMount)
+            MountsTabView(mountManager: mountManager, showAddSheet: $showAddSheet, editingMount: $editingMount, isFixerInstalled: $isFixerInstalled)
                 .tabItem { Label("掛載點", systemImage: "externaldrive.connected.to.line.below") }
                 .tag(0)
 
@@ -73,8 +75,8 @@ struct MainSettingsView: View {
                 .tag(3)
 
             // Tab 5: Preferences
-            PreferencesTabView(mountManager: mountManager)
-                .tabItem { Label("設定", systemImage: "slider.horizontal.3") }
+            PreferencesTabView(mountManager: mountManager, isFixerInstalled: $isFixerInstalled)
+                .tabItem { Label("設定", systemImage: "gear") }
                 .tag(4)
         }
         .frame(minWidth: 760, minHeight: 540)
@@ -110,6 +112,7 @@ struct MainSettingsView: View {
         }
         .onAppear {
             mountManager.refresh()
+            isFixerInstalled = LaunchdService.fixerInstalled
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenDownloadsTab"))) { _ in
             selectedTab = 1
@@ -135,6 +138,7 @@ struct MountsTabView: View {
     @ObservedObject var mountManager: MountManager
     @Binding var showAddSheet: Bool
     @Binding var editingMount: MountPoint?
+    @Binding var isFixerInstalled: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -162,7 +166,7 @@ struct MountsTabView: View {
             .padding(.top, 20)
             .padding(.bottom, 12)
             
-            if !mountManager.systemService.fixerInstalled {
+            if !isFixerInstalled { // Changed from mountManager.systemService.fixerInstalled
                 HStack(spacing: 12) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.red)
@@ -171,6 +175,7 @@ struct MountsTabView: View {
                     Spacer()
                     Button("安裝服務") {
                         let _ = LaunchdService.installFixer()
+                        isFixerInstalled = LaunchdService.fixerInstalled
                         mountManager.refresh()
                     }
                     .buttonStyle(.borderedProminent)
@@ -679,6 +684,7 @@ struct LogLineView: View {
 struct PreferencesTabView: View {
     @ObservedObject var mountManager: MountManager
     @EnvironmentObject var settings: AppSettings
+    @Binding var isFixerInstalled: Bool // Added binding for fixer status
     @State private var showRemoveConfirm = false
     @State private var showAlert = false
     @State private var alertTitle = ""
@@ -725,6 +731,15 @@ struct PreferencesTabView: View {
                     Spacer()
                     Button("檢查更新...") {
                         UpdateService.shared.checkForUpdates(manual: true)
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.blue)
+                }
+                HStack {
+                    Spacer()
+                    Button("重新查看教學...") {
+                        AppStateManager.shared.needsOnboarding = true
+                        openWindow(id: "onboarding")
                     }
                     .buttonStyle(.borderless)
                     .foregroundStyle(.blue)

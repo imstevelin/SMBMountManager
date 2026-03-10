@@ -4,6 +4,7 @@ import Security
 /// Manages SMB passwords in the macOS Keychain using Security.framework
 struct KeychainService {
     static let servicePre = "smb_mount"
+    static var allowUI: Bool = false
 
     /// Save a password to the Keychain. Returns nil on success, or error message on failure.
     static func savePassword(forMount name: String, username: String, password: String) -> String? {
@@ -55,15 +56,33 @@ struct KeychainService {
     /// Retrieve a password from the Keychain
     static func getPassword(forMount name: String, username: String) -> String? {
         let service = "\(servicePre)_\(name)"
-        let query: [String: Any] = [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: username,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
+        
+        // Prevent system prompt until user clicks "Authorize" in our custom UI
+        if !allowUI {
+            query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
+        } else {
+            query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIAllow
+            query[kSecUseOperationPrompt as String] = "為確保後續背景連線不會被打斷，請點擊「永遠允許 (Always Allow)」授權 SMB 掛載管理器。"
+        }
+        
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
+        
+        if status != errSecSuccess && status != errSecItemNotFound {
+            AppLogger.shared.error("[Keychain] Unexpected error or interaction not allowed for \(name). Status: \(status). Triggering UI prompt.")
+            DispatchQueue.main.async {
+                AppStateManager.shared.needsErrorAuthorization = true
+            }
+            return nil
+        }
+        
         guard status == errSecSuccess, let data = result as? Data else {
             return nil
         }
@@ -85,55 +104,30 @@ struct KeychainService {
         SecItemDelete(query as CFDictionary)
     }
 
-    /// Quick diagnostic: check if we can read/write to the Keychain at all
+    /// Scan for all legacy passwords and preemptively trigger their authorization prompts
     static func testKeychainAccess() -> (canWrite: Bool, canRead: Bool, error: String?) {
-        let testService = "\(servicePre)_test_diagnostics"
-        let testData = "test_\(Date().timeIntervalSince1970)".data(using: .utf8)!
-
-        // Clean up any previous test
-        let deleteQuery: [String: Any] = [
+        let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: testService
+            kSecMatchLimit as String: kSecMatchLimitAll,
+            kSecReturnAttributes as String: true
         ]
-        SecItemDelete(deleteQuery as CFDictionary)
-
-        // Try writing
-        let addQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: testService,
-            kSecAttrAccount as String: "test",
-            kSecValueData as String: testData,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
-        ]
-        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
-        let canWrite = (addStatus == errSecSuccess)
-
-        // Try reading
-        var canRead = false
-        if canWrite {
-            let readQuery: [String: Any] = [
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: testService,
-                kSecAttrAccount as String: "test",
-                kSecReturnData as String: true,
-                kSecMatchLimit as String: kSecMatchLimitOne
-            ]
-            var result: AnyObject?
-            let readStatus = SecItemCopyMatching(readQuery as CFDictionary, &result)
-            canRead = (readStatus == errSecSuccess && result is Data)
+        
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        
+        if status == errSecSuccess, let items = result as? [[String: Any]] {
+            for item in items {
+                if let service = item[kSecAttrService as String] as? String,
+                   let account = item[kSecAttrAccount as String] as? String {
+                    if service.hasPrefix(servicePre) {
+                        let mountName = service.replacingOccurrences(of: "\(servicePre)_", with: "")
+                        // Force read to trigger prompt
+                        let _ = getPassword(forMount: mountName, username: account)
+                    }
+                }
+            }
         }
-
-        // Clean up
-        SecItemDelete(deleteQuery as CFDictionary)
-
-        var error: String? = nil
-        if !canWrite {
-            let msg = SecCopyErrorMessageString(addStatus, nil) as String? ?? "未知"
-            error = "Keychain 寫入失敗 (\(addStatus)): \(msg)"
-        } else if !canRead {
-            error = "Keychain 寫入成功但無法讀回"
-        }
-
-        return (canWrite, canRead, error)
+        
+        return (true, true, nil)
     }
 }

@@ -7,7 +7,9 @@ struct SMBMountManagerApp: App {
     @StateObject private var mountManager = MountManager()
     @StateObject private var networkMonitor = NetworkMonitorService()
     @StateObject private var settings = AppSettings.shared
+    @StateObject private var appState = AppStateManager.shared
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @Environment(\.openWindow) private var openWindow
 
     var body: some Scene {
         // Menu Bar Extra — always-visible status icon in top menu bar
@@ -17,16 +19,130 @@ struct SMBMountManagerApp: App {
             MenuBarLabel(mountManager: mountManager, settings: settings)
                 .onAppear {
                     setupAppLifecycle()
+                    if appState.needsOnboarding || appState.needsUpdateAuthorization || appState.needsErrorAuthorization {
+                        openWindow(id: "onboarding")
+                        NSApp.activate(ignoringOtherApps: true)
+                    } else if appState.isReadyToStartBackgroundEngines {
+                        mountManager.startAll()
+                    }
+                }
+                .onChange(of: appState.isReadyToStartBackgroundEngines) { ready in
+                    if ready {
+                        mountManager.startAll()
+                    }
+                }
+                .onChange(of: appState.needsErrorAuthorization) { needsAuth in
+                    if needsAuth {
+                        openWindow(id: "onboarding")
+                        NSApp.activate(ignoringOtherApps: true)
+                    }
+                }
+                .onChange(of: appState.needsUpdateAuthorization) { needsUpdate in
+                    if needsUpdate {
+                        openWindow(id: "onboarding")
+                        NSApp.activate(ignoringOtherApps: true)
+                    }
                 }
         }
 
-        // Settings Window
+        // Onboarding / Authorization Window (Exclusive & Disconnected from Settings)
+        Window("歡迎使用！", id: "onboarding") {
+            if appState.needsOnboarding {
+                OnboardingView()
+                    .environmentObject(appState)
+                    .frame(width: 700, height: 600)
+            } else if appState.needsUpdateAuthorization {
+                let mountCount = mountManager.mounts.count
+                VStack(spacing: 20) {
+                    Image(systemName: "lock.shield.fill")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 80, height: 80)
+                        .foregroundStyle(.blue)
+                    
+                    Text("核心模組已更新")
+                        .font(.title)
+                        .bold()
+                    
+                    Text("SMB 掛載管理器已成功更新。\n\n由於核心模組升級，macOS 安全機制可能會要求您重新授權 Keychain 存取權限。\n\n請點擊「開始授權」，系統會連續彈出 **\(mountCount > 0 ? mountCount : 1)** 次要求框（對應您的掛載點數量）。請輸入「電腦登入密碼」並點擊「永遠允許 (Always Allow)」，直到視窗消失為止。")
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
+                    
+                    Button("開始授權") {
+                        KeychainService.allowUI = true
+                        
+                        Task {
+                            // Sequentially fetch every password to force the OS to pop the UI safely without overlapping
+                            for mount in mountManager.mounts {
+                                let _ = KeychainService.getPassword(forMount: mount.name, username: mount.username)
+                            }
+                            
+                            // Once loop is done, the user has authorized all of them
+                            await MainActor.run {
+                                appState.completeUpdateAuthorization()
+                                checkAndTransitionToSettings()
+                                // Engines weren't started on boot, so start them now that we have clearance
+                                mountManager.startAll()
+                            }
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .padding(.top, 10)
+                }
+                .frame(width: 500, height: 420)
+                .background(Material.regular)
+            } else if appState.needsErrorAuthorization {
+                VStack(spacing: 20) {
+                    Image(systemName: "exclamationmark.lock.fill")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 80, height: 80)
+                        .foregroundStyle(.red)
+                    
+                    Text("Keychain 讀取失敗")
+                        .font(.title)
+                        .bold()
+                    
+                    Text("我們無法從 macOS 的 Keychain 中讀取您的伺服器密碼。\n\n這可能是由於權限被重置。請點擊「開始修復權限」，若系統彈跳出密碼框，請鍵入您的「電腦登入密碼」並點選「永遠允許」。")
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
+                    
+                    Button("開始修復權限") {
+                        KeychainService.allowUI = true
+                        appState.completeErrorAuthorization()
+                        checkAndTransitionToSettings()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                    .controlSize(.large)
+                    .padding(.top, 10)
+                }
+                .frame(width: 500, height: 400)
+                .background(Material.regular)
+            }
+        }
+        .windowResizability(.contentSize)
+
+        // Main Settings Window
         Window("SMB 掛載管理器", id: "settings") {
             MainSettingsView(mountManager: mountManager, networkMonitor: networkMonitor)
                 .environmentObject(settings)
+                .environmentObject(appState)
                 .frame(minWidth: 760, minHeight: 540)
         }
         .defaultSize(width: 860, height: 640)
+    }
+    
+    /// Called when an onboarding or auth flow finishes to see if we should open settings
+    private func checkAndTransitionToSettings() {
+        if appState.isReadyToStartBackgroundEngines {
+            // macOS UI standard is to dismiss the utility window and open the main window
+            for window in NSApp.windows where window.title == "歡迎使用！" {
+                window.close()
+            }
+            openWindow(id: "settings")
+        }
     }
 
     private func setupAppLifecycle() {
@@ -43,9 +159,6 @@ struct SMBMountManagerApp: App {
                 DownloadManager.shared.startAll()
             }
         }
-
-        // Start all engines
-        mountManager.startAll()
     }
 }
 

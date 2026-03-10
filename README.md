@@ -2,7 +2,7 @@
 
 ![macOS 14.0+](https://img.shields.io/badge/macOS-14.0%2B-blue.svg)
 ![Swift 5](https://img.shields.io/badge/Swift-5.0-orange.svg)
-![Release 1.4.0](https://img.shields.io/badge/Release-1.4.0-brightgreen.svg)
+![Release 1.5.0](https://img.shields.io/badge/Release-1.5.0-brightgreen.svg)
 ![License MIT](https://img.shields.io/badge/License-MIT-green.svg)
 
 > **SMB 掛載管理器** 是一個專為 macOS 設計的開源常駐選單列工具。它能自動管理多個 SMB/NAS 掛載點、提供多線程斷點續傳的雙向檔案傳輸、智慧網路環境偵測，並以 Apple Liquid Glass 設計語言打造極致美觀的操作介面。
@@ -46,9 +46,9 @@
 ## 📥 安裝
 
 ### 從 Release 下載（推薦）
-1. 前往 [Releases](https://github.com/imstevelin/SMBMountManager/releases) 頁面
-2. 下載最新的 `SMBMountManager-v1.4.0.zip`
-3. 解壓縮後將 `SMB掛載管理器.app` 拖入「應用程式」資料夾
+1. 前往 [Releases 面板](https://github.com/imstevelin/smbmountmanager/releases) 下載最新的 `SMBMountManager-v1.5.0.zip` (或使用更新機制)。
+2. 解壓縮。
+3. 將 **SMB掛載管理器.app** 拖曳至您的 **應用程式 (Applications)** 資料夾中。
 4. **推薦**：首次開啟後，進入「設定」>「安裝權限修復服務」以獲得最佳穩定性
 
 ### 開發者編譯

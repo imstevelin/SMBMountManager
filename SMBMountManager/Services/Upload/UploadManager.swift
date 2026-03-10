@@ -15,17 +15,17 @@ class UploadManager: ObservableObject {
     private var uploaders: [UUID: ChunkUploader] = [:]
     private var isPausingAll: Bool = false
     
-    // Upload speed tracking — Exponential Moving Average (EMA) for smooth display
+    // Global and Per-Task Speed Tracking
     @Published var currentSpeedBytesPerSecond: Int64 = 0
-    @Published var currentETASpeedBytesPerSecond: Int64 = 0 // Slower EMA specifically for ETA calculation
-    private var lastTotalBytesUploaded: UInt64 = 0
+    @Published var taskSpeeds: [UUID: Int64] = [:]
+    @Published var taskETASpeeds: [UUID: Int64] = [:]
+    
+    private var speedTrackers: [UUID: SpeedTracker] = [:]
     private var speedTimer: Timer?
-    private var emaSpeed: Double = 0.0
-    private var etaEmaSpeed: Double = 0.0
+    
     private let emaSmoothingFactor: Double = 0.3  // α: higher = more responsive, lower = smoother
     private let etaSmoothingFactor: Double = 0.02  // Much slower α for a stable ETA that represents the last ~50 seconds
     private let emaWarmUpFactor: Double = 0.5       // α for the first N samples (fast ramp)
-    private var emaSampleCount: Int = 0             // Number of samples since last reset
     private let emaWarmUpSamples: Int = 5           // Use warm-up α for this many samples
     private var lastSpeedSampleTime: Date = Date()
     
@@ -42,10 +42,19 @@ class UploadManager: ObservableObject {
         startSpeedMeasurement()
     }
     
+    /// Reset speed tracking state. Call when uploads start or resume for instant accurate readings.
+    // (Removed resetSpeedTracking as trackers self-manage via the timer loop)
+    
     private func startSpeedMeasurement() {
         speedTimer?.invalidate()
         lastSpeedSampleTime = Date()
-        lastTotalBytesUploaded = tasks.reduce(UInt64(0)) { $0 + $1.uploadedBytes }
+        
+        // Ensure trackers exist for currently uploading tasks
+        for task in tasks where task.state == .uploading {
+            if speedTrackers[task.id] == nil {
+                speedTrackers[task.id] = SpeedTracker(lastBytes: task.uploadedBytes)
+            }
+        }
         
         let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -55,53 +64,61 @@ class UploadManager: ObservableObject {
                 guard elapsed > 0.1 else { return }
                 self.lastSpeedSampleTime = now
                 
-                let currentTotal = self.tasks.reduce(UInt64(0)) { $0 + $1.uploadedBytes }
-                let isUploading = self.tasks.contains { $0.state == .uploading }
+                var totalGlobalSpeed: Int64 = 0
+                var activeTaskIds = Set<UUID>()
                 
-                if isUploading {
-                    let bytesDelta = currentTotal >= self.lastTotalBytesUploaded
-                        ? Double(currentTotal - self.lastTotalBytesUploaded)
-                        : 0.0
-                    let instantSpeed = bytesDelta / elapsed
-                    
-                    // Use warm-up factor for the first N samples for fast convergence
-                    let alpha = self.emaSampleCount < self.emaWarmUpSamples ? self.emaWarmUpFactor : self.emaSmoothingFactor
-                    // ETA also needs warm-up so it converges quickly after restart
-                    let etaAlpha = self.emaSampleCount < self.emaWarmUpSamples ? 0.3 : self.etaSmoothingFactor
-                    
-                    if self.emaSpeed == 0 && instantSpeed > 0 {
-                        self.emaSpeed = instantSpeed
-                        self.etaEmaSpeed = instantSpeed
-                    } else {
-                        self.emaSpeed = alpha * instantSpeed + (1.0 - alpha) * self.emaSpeed
-                        self.etaEmaSpeed = etaAlpha * instantSpeed + (1.0 - etaAlpha) * self.etaEmaSpeed
+                for task in self.tasks {
+                    if task.state == .uploading {
+                        activeTaskIds.insert(task.id)
+                        var tracker = self.speedTrackers[task.id] ?? SpeedTracker(lastBytes: task.uploadedBytes)
+                        
+                        let bytesDelta = task.uploadedBytes >= tracker.lastBytes
+                            ? Double(task.uploadedBytes - tracker.lastBytes)
+                            : 0.0
+                        let instantSpeed = bytesDelta / elapsed
+                        
+                        let alpha = tracker.emaSampleCount < self.emaWarmUpSamples ? self.emaWarmUpFactor : self.emaSmoothingFactor
+                        let etaAlpha = tracker.emaSampleCount < self.emaWarmUpSamples ? 0.3 : self.etaSmoothingFactor
+                        
+                        if tracker.emaSpeed == 0 && instantSpeed > 0 {
+                            tracker.emaSpeed = instantSpeed
+                            tracker.etaEmaSpeed = instantSpeed
+                        } else {
+                            tracker.emaSpeed = alpha * instantSpeed + (1.0 - alpha) * tracker.emaSpeed
+                            tracker.etaEmaSpeed = etaAlpha * instantSpeed + (1.0 - etaAlpha) * tracker.etaEmaSpeed
+                        }
+                        
+                        tracker.emaSampleCount += 1
+                        
+                        // Bounds clamp
+                        if tracker.etaEmaSpeed > 0 && tracker.emaSpeed > 0 {
+                            if tracker.etaEmaSpeed < tracker.emaSpeed * 0.3 {
+                                tracker.etaEmaSpeed = tracker.emaSpeed * 0.5
+                            } else if tracker.etaEmaSpeed > tracker.emaSpeed * 3.0 {
+                                tracker.etaEmaSpeed = tracker.emaSpeed * 2.0
+                            }
+                        }
+                        
+                        tracker.lastBytes = task.uploadedBytes
+                        self.speedTrackers[task.id] = tracker
+                        
+                        let currentTaskSpeed = Int64(tracker.emaSpeed)
+                        self.taskSpeeds[task.id] = currentTaskSpeed
+                        self.taskETASpeeds[task.id] = Int64(tracker.etaEmaSpeed)
+                        
+                        totalGlobalSpeed += currentTaskSpeed
                     }
-                    self.emaSampleCount += 1
-                    self.currentSpeedBytesPerSecond = Int64(self.emaSpeed)
-                    
-                    // Clamp ETA speed to stay within a reasonable range of the live speed.
-                    if self.etaEmaSpeed > 0 && self.emaSpeed > 0 && self.etaEmaSpeed < self.emaSpeed * 0.3 {
-                         self.etaEmaSpeed = self.emaSpeed * 0.5
-                    }
-                    if self.etaEmaSpeed > 0 && self.emaSpeed > 0 && self.etaEmaSpeed > self.emaSpeed * 3.0 {
-                         self.etaEmaSpeed = self.emaSpeed * 2.0
-                    }
-                    self.currentETASpeedBytesPerSecond = Int64(self.etaEmaSpeed)
-                    
-                } else {
-                    self.emaSpeed *= 0.4
-                    self.etaEmaSpeed *= 0.4
-                    if self.emaSpeed < 1024 {
-                        self.emaSpeed = 0
-                        self.etaEmaSpeed = 0
-                    }
-                    self.currentSpeedBytesPerSecond = Int64(self.emaSpeed)
-                    self.currentETASpeedBytesPerSecond = Int64(self.etaEmaSpeed)
-                    // Reset sample count so next upload session gets warm-up
-                    self.emaSampleCount = 0
                 }
                 
-                self.lastTotalBytesUploaded = currentTotal
+                // Cleanup trackers for non-uploading tasks
+                let toRemove = self.speedTrackers.keys.filter { !activeTaskIds.contains($0) }
+                for id in toRemove {
+                    self.speedTrackers.removeValue(forKey: id)
+                    self.taskSpeeds.removeValue(forKey: id)
+                    self.taskETASpeeds.removeValue(forKey: id)
+                }
+                
+                self.currentSpeedBytesPerSecond = totalGlobalSpeed
             }
         }
         RunLoop.main.add(timer, forMode: .common)

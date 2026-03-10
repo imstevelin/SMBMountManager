@@ -1,0 +1,17 @@
+{
+  "images": [
+    {
+      "idiom": "mac",
+      "filename": "選單圖示-一般樣式.png",
+      "scale": "1x"
+    },
+    {
+      "idiom": "mac",
+      "scale": "2x"
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  }
+}

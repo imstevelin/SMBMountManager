@@ -1,0 +1,17 @@
+{
+  "images" : [
+    {
+      "filename" : "右鍵選單展示-new-1.png",
+      "idiom" : "mac",
+      "scale" : "1x"
+    },
+    {
+      "idiom" : "mac",
+      "scale" : "2x"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}
