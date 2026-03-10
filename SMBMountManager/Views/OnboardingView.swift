@@ -65,7 +65,7 @@ struct OnboardingView: View {
                                 currentStep += 1
                             } else {
                                 appState.completeOnboarding()
-                                for window in NSApp.windows where window.title == "歡迎使用！" { window.close() }
+                                for window in NSApp.windows where window.identifier?.rawValue == "onboarding" { window.close() }
                                 openWindow(id: "settings")
                             }
                         }

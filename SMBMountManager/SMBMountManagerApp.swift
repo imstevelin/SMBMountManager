@@ -46,80 +46,119 @@ struct SMBMountManagerApp: App {
         }
 
         // Onboarding / Authorization Window (Exclusive & Disconnected from Settings)
-        Window("歡迎使用！", id: "onboarding") {
+        Window("SMB 掛載管理器", id: "onboarding") {
             if appState.needsOnboarding {
                 OnboardingView()
                     .environmentObject(appState)
                     .frame(width: 700, height: 600)
             } else if appState.needsUpdateAuthorization {
-                let mountCount = mountManager.mounts.count
-                VStack(spacing: 20) {
-                    Image(systemName: "lock.shield.fill")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 80, height: 80)
-                        .foregroundStyle(.blue)
-                    
-                    Text("核心模組已更新")
-                        .font(.title)
-                        .bold()
-                    
-                    Text("SMB 掛載管理器已成功更新。\n\n由於核心模組升級，macOS 安全機制可能會要求您重新授權 Keychain 存取權限。\n\n請點擊「開始授權」，系統會連續彈出 **\(mountCount > 0 ? mountCount : 1)** 次要求框（對應您的掛載點數量）。請輸入「電腦登入密碼」並點擊「永遠允許 (Always Allow)」，直到視窗消失為止。")
+                let mountCount = max(mountManager.mounts.count, 1)
+                VStack(spacing: 0) {
+                    Spacer()
+
+                    // App icon
+                    if let appIcon = NSApplication.shared.applicationIconImage {
+                        Image(nsImage: appIcon)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 96, height: 96)
+                    }
+
+                    Text("SMB 掛載管理器已更新 🎉")
+                        .font(.system(size: 22, weight: .bold))
+                        .padding(.top, 16)
+
+                    Text("由於核心模組升級，需要重新驗證 Keychain 密碼存取權限。\n點擊下方按鈕後，系統將彈出 **\(mountCount)** 次密碼驗證框，\n請輸入「電腦登入密碼」並選擇「**永遠允許**」。")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
+                        .lineSpacing(4)
+                        .padding(.top, 10)
                         .padding(.horizontal, 40)
-                    
-                    Button("重新驗證") {
+
+                    // Tip card
+                    HStack(spacing: 10) {
+                        Image(systemName: "info.circle.fill")
+                            .foregroundStyle(.blue)
+                            .font(.system(size: 16))
+                        Text("完成驗證後，背景掛載服務將自動啟動。")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(12)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+                    .glassEffect(.regular, in: .rect(cornerRadius: 10))
+                    .padding(.top, 16)
+
+                    Button(action: {
                         KeychainService.allowUI = true
                         
                         Task {
-                            // Sequentially fetch every password to force the OS to pop the UI safely without overlapping
                             for mount in mountManager.mounts {
                                 let _ = KeychainService.getPassword(forMount: mount.name, username: mount.username)
                             }
                             
-                            // Once loop is done, the user has authorized all of them
                             await MainActor.run {
                                 appState.completeUpdateAuthorization()
                                 checkAndTransitionToSettings()
-                                // Engines weren't started on boot, so start them now that we have clearance
                                 mountManager.startAll()
                             }
+                        }
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                            Text("重新驗證")
                         }
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
-                    .padding(.top, 10)
+                    .padding(.top, 20)
+
+                    Spacer()
                 }
-                .frame(width: 500, height: 420)
-                .background(Material.regular)
+                .frame(width: 480, height: 420)
             } else if appState.needsErrorAuthorization {
-                VStack(spacing: 20) {
-                    Image(systemName: "exclamationmark.lock.fill")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 80, height: 80)
-                        .foregroundStyle(.red)
-                    
-                    Text("Keychain 讀取失敗")
-                        .font(.title)
-                        .bold()
-                    
-                    Text("我們無法從 macOS 的 Keychain 中讀取您的伺服器密碼。\n\n這可能是由於權限被重置。請點擊「開始修復權限」，若系統彈跳出密碼框，請鍵入您的「電腦登入密碼」並點選「永遠允許」。")
+                VStack(spacing: 0) {
+                    Spacer()
+
+                    // App icon
+                    if let appIcon = NSApplication.shared.applicationIconImage {
+                        Image(nsImage: appIcon)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 96, height: 96)
+                    }
+
+                    Text("SMB 掛載管理器：密碼讀取異常 ⚠️")
+                        .font(.system(size: 22, weight: .bold))
+                        .padding(.top, 16)
+
+                    Text("無法從 Keychain 中讀取伺服器密碼，可能是權限被重置。\n點擊下方按鈕後，若系統彈出密碼框，\n請輸入「電腦登入密碼」並選擇「**永遠允許**」。")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
+                        .lineSpacing(4)
+                        .padding(.top, 10)
                         .padding(.horizontal, 40)
-                    
-                    Button("開始修復權限") {
+
+                    Button(action: {
                         KeychainService.allowUI = true
                         appState.completeErrorAuthorization()
                         checkAndTransitionToSettings()
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "wrench.and.screwdriver.fill")
+                            Text("修復權限")
+                        }
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.red)
                     .controlSize(.large)
-                    .padding(.top, 10)
+                    .padding(.top, 20)
+
+                    Spacer()
                 }
-                .frame(width: 500, height: 400)
-                .background(Material.regular)
+                .frame(width: 480, height: 380)
             }
         }
         .windowResizability(.contentSize)
@@ -138,7 +177,7 @@ struct SMBMountManagerApp: App {
     private func checkAndTransitionToSettings() {
         if appState.isReadyToStartBackgroundEngines {
             // macOS UI standard is to dismiss the utility window and open the main window
-            for window in NSApp.windows where window.title == "歡迎使用！" {
+            for window in NSApp.windows where window.identifier?.rawValue == "onboarding" {
                 window.close()
             }
             openWindow(id: "settings")
