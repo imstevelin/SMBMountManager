@@ -2,20 +2,16 @@ import SwiftUI
 import CoreLocation
 
 /// Post-update authorization view.
-/// Shows the app icon, Keychain re-verification card, and an optional
-/// Location Services re-authorization card. Matches Liquid Glass styling.
+/// A single "重新驗證並繼續" button sequentially:
+/// 1. Triggers Keychain re-auth (system password dialogs if needed)
+/// 2. Requests Location Services permission (system dialog)
+/// 3. Proceeds to the main app
 struct UpdateAuthorizationView: View {
     @ObservedObject var mountManager: MountManager
     @ObservedObject var appState: AppStateManager
     var onComplete: () -> Void
 
-    @State private var isLocationAuthorized: Bool = {
-        let status = CLLocationManager().authorizationStatus
-        return status == .authorizedAlways || status == .authorized
-    }()
     @State private var isProcessing = false
-
-    private var mountCount: Int { max(mountManager.mounts.count, 1) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -33,17 +29,17 @@ struct UpdateAuthorizationView: View {
                 .font(.system(size: 22, weight: .bold))
                 .padding(.top, 16)
 
-            Text("軟體已成功升級，請確認以下項目以確保服務正常運作。")
+            Text("軟體已成功升級，請點擊下方按鈕完成必要的權限驗證。")
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.top, 6)
                 .padding(.horizontal, 40)
 
-            // ── Authorization Cards ──
+            // ── Info Cards ──
             VStack(spacing: 10) {
 
-                // Keychain card
+                // Keychain info
                 HStack(spacing: 12) {
                     Image(systemName: "key.fill")
                         .foregroundStyle(.blue)
@@ -53,17 +49,12 @@ struct UpdateAuthorizationView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Keychain 密碼驗證")
                             .font(.system(size: 13, weight: .semibold))
-                        Text("系統可能要求輸入電腦密碼，請選擇「永遠允許」。")
+                        Text("若系統要求輸入電腦密碼，請選擇「永遠允許」。")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                     }
 
                     Spacer()
-
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                        .font(.system(size: 18))
-                        .opacity(0) // Always present but invisible — keychain is verified on button click
                 }
                 .padding(14)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
@@ -73,7 +64,7 @@ struct UpdateAuthorizationView: View {
                         .strokeBorder(Color.blue.opacity(0.4), lineWidth: 1)
                 )
 
-                // Location card
+                // Location info
                 HStack(spacing: 12) {
                     Image(systemName: "location.fill")
                         .foregroundStyle(.orange)
@@ -81,7 +72,7 @@ struct UpdateAuthorizationView: View {
                         .frame(width: 28)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("定位服務授權（建議）📍")
+                        Text("定位服務授權")
                             .font(.system(size: 13, weight: .semibold))
                         Text("允許讀取 Wi-Fi 名稱，實現智慧掛載與退出。")
                             .font(.system(size: 11))
@@ -89,33 +80,19 @@ struct UpdateAuthorizationView: View {
                     }
 
                     Spacer()
-
-                    Button(action: {
-                        WiFiService.requestPermission()
-                        isLocationAuthorized = true
-                        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices") {
-                            NSWorkspace.shared.open(url)
-                        }
-                    }) {
-                        Text(isLocationAuthorized ? "已授權 ✓" : "前往授權")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(isLocationAuthorized ? .gray : .orange)
-                    .controlSize(.small)
-                    .disabled(isLocationAuthorized)
                 }
                 .padding(14)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
                 .glassEffect(.regular, in: .rect(cornerRadius: 12))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(isLocationAuthorized ? Color.green.opacity(0.5) : Color.orange.opacity(0.5), lineWidth: 1)
+                        .strokeBorder(Color.orange.opacity(0.4), lineWidth: 1)
                 )
             }
             .frame(maxWidth: 420)
             .padding(.top, 20)
 
-            // Tip card
+            // Tip
             HStack(spacing: 10) {
                 Image(systemName: "info.circle.fill")
                     .foregroundStyle(.blue)
@@ -129,7 +106,8 @@ struct UpdateAuthorizationView: View {
             .glassEffect(.regular, in: .rect(cornerRadius: 10))
             .padding(.top, 14)
 
-            Button(action: performVerification) {
+            // Single action button
+            Button(action: performFullVerification) {
                 HStack(spacing: 6) {
                     if isProcessing {
                         ProgressView()
@@ -150,17 +128,26 @@ struct UpdateAuthorizationView: View {
         .frame(width: 500, height: 520)
     }
 
-    private func performVerification() {
+    private func performFullVerification() {
         isProcessing = true
         KeychainService.allowUI = true
 
         Task {
-            // Sequentially fetch every password.
-            // If Keychain is already authorized, these return instantly without popping a system dialog.
+            // Step 1: Keychain — sequentially query every stored password.
+            // If already authorized, returns instantly; otherwise triggers system password dialogs.
             for mount in mountManager.mounts {
                 let _ = KeychainService.getPassword(forMount: mount.name, username: mount.username)
             }
 
+            // Step 2: Location Services — request permission (triggers system dialog if not yet determined).
+            await MainActor.run {
+                WiFiService.requestPermission()
+            }
+
+            // Brief delay to allow the location dialog to appear and be dismissed
+            try? await Task.sleep(nanoseconds: 500_000_000)
+
+            // Step 3: Complete and proceed
             await MainActor.run {
                 isProcessing = false
                 appState.completeUpdateAuthorization()
