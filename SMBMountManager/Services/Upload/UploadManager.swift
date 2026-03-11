@@ -52,61 +52,66 @@ class UploadManager: ObservableObject {
         // Ensure trackers exist for currently uploading tasks
         for task in tasks where task.state == .uploading {
             if speedTrackers[task.id] == nil {
-                speedTrackers[task.id] = SpeedTracker(lastBytes: task.uploadedBytes)
+                speedTrackers[task.id] = SpeedTracker(lastBytes: task.uploadedBytes, lastTrackedTime: Date())
             }
         }
         
         let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in
+            // Use DispatchQueue.main.async instead of Task { @MainActor } to avoid
+            // event loop starvation when the window is inactive.
+            DispatchQueue.main.async {
                 guard let self = self else { return }
-                let now = Date()
-                let elapsed = now.timeIntervalSince(self.lastSpeedSampleTime)
-                guard elapsed > 0.1 else { return }
-                self.lastSpeedSampleTime = now
                 
                 var totalGlobalSpeed: Int64 = 0
                 var activeTaskIds = Set<UUID>()
+                let now = Date()
                 
                 for task in self.tasks {
                     if task.state == .uploading {
                         activeTaskIds.insert(task.id)
-                        var tracker = self.speedTrackers[task.id] ?? SpeedTracker(lastBytes: task.uploadedBytes)
+                        var tracker = self.speedTrackers[task.id] ?? SpeedTracker(lastBytes: task.uploadedBytes, lastTrackedTime: now)
                         
-                        let bytesDelta = task.uploadedBytes >= tracker.lastBytes
-                            ? Double(task.uploadedBytes - tracker.lastBytes)
-                            : 0.0
-                        let instantSpeed = bytesDelta / elapsed
+                        let elapsed = now.timeIntervalSince(tracker.lastTrackedTime)
                         
-                        let alpha = tracker.emaSampleCount < self.emaWarmUpSamples ? self.emaWarmUpFactor : self.emaSmoothingFactor
-                        let etaAlpha = tracker.emaSampleCount < self.emaWarmUpSamples ? 0.3 : self.etaSmoothingFactor
-                        
-                        if tracker.emaSpeed == 0 && instantSpeed > 0 {
-                            tracker.emaSpeed = instantSpeed
-                            tracker.etaEmaSpeed = instantSpeed
-                        } else {
-                            tracker.emaSpeed = alpha * instantSpeed + (1.0 - alpha) * tracker.emaSpeed
-                            tracker.etaEmaSpeed = etaAlpha * instantSpeed + (1.0 - etaAlpha) * tracker.etaEmaSpeed
-                        }
-                        
-                        tracker.emaSampleCount += 1
-                        
-                        // Bounds clamp
-                        if tracker.etaEmaSpeed > 0 && tracker.emaSpeed > 0 {
-                            if tracker.etaEmaSpeed < tracker.emaSpeed * 0.3 {
-                                tracker.etaEmaSpeed = tracker.emaSpeed * 0.5
-                            } else if tracker.etaEmaSpeed > tracker.emaSpeed * 3.0 {
-                                tracker.etaEmaSpeed = tracker.emaSpeed * 2.0
+                        // Only update if at least roughly 1 second has passed
+                        if elapsed >= 0.5 {
+                            let bytesDelta = task.uploadedBytes >= tracker.lastBytes
+                                ? Double(task.uploadedBytes - tracker.lastBytes)
+                                : 0.0
+                            let instantSpeed = bytesDelta / elapsed
+                            
+                            let alpha = tracker.emaSampleCount < self.emaWarmUpSamples ? self.emaWarmUpFactor : self.emaSmoothingFactor
+                            let etaAlpha = tracker.emaSampleCount < self.emaWarmUpSamples ? 0.3 : self.etaSmoothingFactor
+                            
+                            if tracker.emaSpeed == 0 && instantSpeed > 0 {
+                                tracker.emaSpeed = instantSpeed
+                                tracker.etaEmaSpeed = instantSpeed
+                            } else {
+                                tracker.emaSpeed = alpha * instantSpeed + (1.0 - alpha) * tracker.emaSpeed
+                                tracker.etaEmaSpeed = etaAlpha * instantSpeed + (1.0 - etaAlpha) * tracker.etaEmaSpeed
                             }
+                            
+                            tracker.emaSampleCount += 1
+                            
+                            // Bounds clamp
+                            if tracker.etaEmaSpeed > 0 && tracker.emaSpeed > 0 {
+                                if tracker.etaEmaSpeed < tracker.emaSpeed * 0.3 {
+                                    tracker.etaEmaSpeed = tracker.emaSpeed * 0.5
+                                } else if tracker.etaEmaSpeed > tracker.emaSpeed * 3.0 {
+                                    tracker.etaEmaSpeed = tracker.emaSpeed * 2.0
+                                }
+                            }
+                            
+                            tracker.lastBytes = task.uploadedBytes
+                            tracker.lastTrackedTime = now
+                            self.speedTrackers[task.id] = tracker
+                            
+                            let currentTaskSpeed = Int64(tracker.emaSpeed)
+                            self.taskSpeeds[task.id] = currentTaskSpeed
+                            self.taskETASpeeds[task.id] = Int64(tracker.etaEmaSpeed)
                         }
                         
-                        tracker.lastBytes = task.uploadedBytes
-                        self.speedTrackers[task.id] = tracker
-                        
-                        let currentTaskSpeed = Int64(tracker.emaSpeed)
-                        self.taskSpeeds[task.id] = currentTaskSpeed
-                        self.taskETASpeeds[task.id] = Int64(tracker.etaEmaSpeed)
-                        
-                        totalGlobalSpeed += currentTaskSpeed
+                        totalGlobalSpeed += self.taskSpeeds[task.id] ?? 0
                     }
                 }
                 
@@ -121,7 +126,6 @@ class UploadManager: ObservableObject {
                 self.currentSpeedBytesPerSecond = totalGlobalSpeed
                 
                 // Coalesce all the dictionary changes above into a single objectWillChange
-                // to prevent SwiftUI's AttributeGraph from growing unboundedly.
                 self.objectWillChange.send()
             }
         }

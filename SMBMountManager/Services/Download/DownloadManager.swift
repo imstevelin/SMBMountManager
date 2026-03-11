@@ -2,10 +2,11 @@ import Foundation
 import Combine
 
 struct SpeedTracker {
-    var emaSpeed: Double = 0.0
-    var etaEmaSpeed: Double = 0.0
+    var lastBytes: UInt64
+    var lastTrackedTime: Date
+    var emaSpeed: Double = 0
+    var etaEmaSpeed: Double = 0
     var emaSampleCount: Int = 0
-    var lastBytes: UInt64 = 0
 }
 
 @MainActor
@@ -59,18 +60,15 @@ class DownloadManager: ObservableObject {
         // Ensure trackers exist for currently downloading tasks
         for task in tasks where task.state == .downloading {
             if speedTrackers[task.id] == nil {
-                speedTrackers[task.id] = SpeedTracker(lastBytes: task.downloadedBytes)
+                speedTrackers[task.id] = SpeedTracker(lastBytes: task.downloadedBytes, lastTrackedTime: Date())
             }
         }
         
         // Sample every 1 second for stable byte deltas
         let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in
+            DispatchQueue.main.async {
                 guard let self = self else { return }
                 let now = Date()
-                let elapsed = now.timeIntervalSince(self.lastSpeedSampleTime)
-                guard elapsed > 0.1 else { return }
-                self.lastSpeedSampleTime = now
                 
                 var totalGlobalSpeed: Int64 = 0
                 var activeTaskIds = Set<UUID>()
@@ -78,48 +76,54 @@ class DownloadManager: ObservableObject {
                 for task in self.tasks {
                     if task.state == .downloading {
                         activeTaskIds.insert(task.id)
-                        var tracker = self.speedTrackers[task.id] ?? SpeedTracker(lastBytes: task.downloadedBytes)
+                        var tracker = self.speedTrackers[task.id] ?? SpeedTracker(lastBytes: task.downloadedBytes, lastTrackedTime: now)
                         
-                        let bytesDelta = task.downloadedBytes >= tracker.lastBytes
-                            ? Double(task.downloadedBytes - tracker.lastBytes)
-                            : 0.0
-                        var instantSpeed = bytesDelta / elapsed
+                        let elapsed = now.timeIntervalSince(tracker.lastTrackedTime)
                         
-                        // Spike clamp
-                        if tracker.emaSpeed > 0 && instantSpeed > tracker.emaSpeed * 5.0 {
-                            instantSpeed = tracker.emaSpeed * 1.5
-                        }
-                        
-                        let alpha = tracker.emaSampleCount < self.emaWarmUpSamples ? self.emaWarmUpFactor : self.emaSmoothingFactor
-                        let etaAlpha = tracker.emaSampleCount < self.emaWarmUpSamples ? 0.3 : self.etaSmoothingFactor
-                        
-                        if tracker.emaSpeed == 0 && instantSpeed > 0 {
-                            tracker.emaSpeed = instantSpeed
-                            tracker.etaEmaSpeed = instantSpeed
-                        } else {
-                            tracker.emaSpeed = alpha * instantSpeed + (1.0 - alpha) * tracker.emaSpeed
-                            tracker.etaEmaSpeed = etaAlpha * instantSpeed + (1.0 - etaAlpha) * tracker.etaEmaSpeed
-                        }
-                        
-                        tracker.emaSampleCount += 1
-                        
-                        // Bounds clamp
-                        if tracker.etaEmaSpeed > 0 && tracker.emaSpeed > 0 {
-                            if tracker.etaEmaSpeed < tracker.emaSpeed * 0.3 {
-                                tracker.etaEmaSpeed = tracker.emaSpeed * 0.5
-                            } else if tracker.etaEmaSpeed > tracker.emaSpeed * 3.0 {
-                                tracker.etaEmaSpeed = tracker.emaSpeed * 2.0
+                        // Only update if at least roughly 1 second has passed
+                        if elapsed >= 0.5 {
+                            let bytesDelta = task.downloadedBytes >= tracker.lastBytes
+                                ? Double(task.downloadedBytes - tracker.lastBytes)
+                                : 0.0
+                            var instantSpeed = bytesDelta / elapsed
+                            
+                            // Spike clamp
+                            if tracker.emaSpeed > 0 && instantSpeed > tracker.emaSpeed * 5.0 {
+                                instantSpeed = tracker.emaSpeed * 1.5
                             }
+                            
+                            let alpha = tracker.emaSampleCount < self.emaWarmUpSamples ? self.emaWarmUpFactor : self.emaSmoothingFactor
+                            let etaAlpha = tracker.emaSampleCount < self.emaWarmUpSamples ? 0.3 : self.etaSmoothingFactor
+                            
+                            if tracker.emaSpeed == 0 && instantSpeed > 0 {
+                                tracker.emaSpeed = instantSpeed
+                                tracker.etaEmaSpeed = instantSpeed
+                            } else {
+                                tracker.emaSpeed = alpha * instantSpeed + (1.0 - alpha) * tracker.emaSpeed
+                                tracker.etaEmaSpeed = etaAlpha * instantSpeed + (1.0 - etaAlpha) * tracker.etaEmaSpeed
+                            }
+                            
+                            tracker.emaSampleCount += 1
+                            
+                            // Bounds clamp
+                            if tracker.etaEmaSpeed > 0 && tracker.emaSpeed > 0 {
+                                if tracker.etaEmaSpeed < tracker.emaSpeed * 0.3 {
+                                    tracker.etaEmaSpeed = tracker.emaSpeed * 0.5
+                                } else if tracker.etaEmaSpeed > tracker.emaSpeed * 3.0 {
+                                    tracker.etaEmaSpeed = tracker.emaSpeed * 2.0
+                                }
+                            }
+                            
+                            tracker.lastBytes = task.downloadedBytes
+                            tracker.lastTrackedTime = now
+                            self.speedTrackers[task.id] = tracker
+                            
+                            let currentTaskSpeed = Int64(tracker.emaSpeed)
+                            self.taskSpeeds[task.id] = currentTaskSpeed
+                            self.taskETASpeeds[task.id] = Int64(tracker.etaEmaSpeed)
                         }
                         
-                        tracker.lastBytes = task.downloadedBytes
-                        self.speedTrackers[task.id] = tracker
-                        
-                        let currentTaskSpeed = Int64(tracker.emaSpeed)
-                        self.taskSpeeds[task.id] = currentTaskSpeed
-                        self.taskETASpeeds[task.id] = Int64(tracker.etaEmaSpeed)
-                        
-                        totalGlobalSpeed += currentTaskSpeed
+                        totalGlobalSpeed += self.taskSpeeds[task.id] ?? 0
                     }
                 }
                 
@@ -132,6 +136,9 @@ class DownloadManager: ObservableObject {
                 }
                 
                 self.currentSpeedBytesPerSecond = totalGlobalSpeed
+                
+                // CRITICAL: Notify SwiftUI that dictionary values (speed, ETA) have changed so the UI updates
+                self.objectWillChange.send()
             }
         }
         RunLoop.main.add(timer, forMode: .common)
