@@ -192,7 +192,7 @@ class ChunkDownloader {
             taskLock.lock()
             self.task.chunks[index].downloadedBytes = downloaded
             
-            let shouldUpdate = now.timeIntervalSince(self.lastProgressUpdateTime) > 0.10 || currentOffset >= endOffset
+            let shouldUpdate = now.timeIntervalSince(self.lastProgressUpdateTime) > 0.50 || currentOffset >= endOffset
             if shouldUpdate {
                 self.lastProgressUpdateTime = now
             }

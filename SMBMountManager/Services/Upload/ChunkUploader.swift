@@ -167,7 +167,7 @@ class ChunkUploader {
             taskLock.lock()
             self.task.uploadedBytes = currentOffset
             
-            let shouldUpdate = now.timeIntervalSince(self.lastProgressUpdateTime) > 0.10 || currentOffset >= totalSize
+            let shouldUpdate = now.timeIntervalSince(self.lastProgressUpdateTime) > 0.50 || currentOffset >= totalSize
             if shouldUpdate {
                 self.lastProgressUpdateTime = now
             }

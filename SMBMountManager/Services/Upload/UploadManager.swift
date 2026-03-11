@@ -56,7 +56,7 @@ class UploadManager: ObservableObject {
             }
         }
         
-        let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self = self else { return }
                 let now = Date()
@@ -119,6 +119,10 @@ class UploadManager: ObservableObject {
                 }
                 
                 self.currentSpeedBytesPerSecond = totalGlobalSpeed
+                
+                // Coalesce all the dictionary changes above into a single objectWillChange
+                // to prevent SwiftUI's AttributeGraph from growing unboundedly.
+                self.objectWillChange.send()
             }
         }
         RunLoop.main.add(timer, forMode: .common)
@@ -422,7 +426,12 @@ class UploadManager: ObservableObject {
             updatedTask.totalBytes = tasks[index].totalBytes
         }
         
-        tasks[index] = updatedTask
+        // Only mutate the @Published array if something actually changed,
+        // to avoid redundant SwiftUI state graph updates that can crash AttributeGraph.
+        let existing = tasks[index]
+        if existing.uploadedBytes != updatedTask.uploadedBytes || existing.state != updatedTask.state || existing.errorMessage != updatedTask.errorMessage || existing.totalBytes != updatedTask.totalBytes {
+            tasks[index] = updatedTask
+        }
         
         let finalState = tasks[index].state
         if finalState != currentState {
