@@ -383,6 +383,8 @@ class MountManager: ObservableObject {
 
     /// Start engine for a single mount
     func startEngine(for mount: MountPoint) {
+        guard AppStateManager.shared.isReadyToStartBackgroundEngines else { return }
+        
         // Enforce network restriction BEFORE starting
         if isNetworkRestricted(for: mount) {
             networkPauseMount(name: mount.name)

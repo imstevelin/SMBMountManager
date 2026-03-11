@@ -22,6 +22,7 @@ struct SMBMountManagerApp: App {
 
         nm.onNetworkChanged = { [weak mm] in
             Task { @MainActor in
+                guard AppStateManager.shared.isReadyToStartBackgroundEngines else { return }
                 mm?.handleNetworkChange()
                 DownloadManager.shared.startAll()
             }
