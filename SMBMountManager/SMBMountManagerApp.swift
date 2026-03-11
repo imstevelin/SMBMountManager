@@ -34,34 +34,33 @@ struct SMBMountManagerApp: App {
             StatusMenuView(mountManager: mountManager, networkMonitor: networkMonitor)
         } label: {
             MenuBarLabel(mountManager: mountManager, settings: settings)
-                .onAppear {
-                    // Delay window opening slightly to ensure SwiftUI's Scene graph is fully registered.
-                    // Without this, fast Macs might swallow the openWindow command on fresh installs.
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        if appState.needsOnboarding || appState.needsUpdateAuthorization || appState.needsErrorAuthorization {
-                            NSApp.activate(ignoringOtherApps: true)
-                            openWindow(id: "onboarding")
-                        } else if appState.isReadyToStartBackgroundEngines {
-                            mountManager.startAll()
+                .background {
+                    Color.clear
+                        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("TriggerStartupAction"))) { _ in
+                            if appState.needsOnboarding || appState.needsUpdateAuthorization || appState.needsErrorAuthorization {
+                                NSApp.activate(ignoringOtherApps: true)
+                                openWindow(id: "onboarding")
+                            } else if appState.isReadyToStartBackgroundEngines {
+                                mountManager.startAll()
+                            }
                         }
-                    }
-                }
-                .onChange(of: appState.isReadyToStartBackgroundEngines) { ready in
-                    if ready {
-                        mountManager.startAll()
-                    }
-                }
-                .onChange(of: appState.needsErrorAuthorization) { needsAuth in
-                    if needsAuth {
-                        openWindow(id: "onboarding")
-                        NSApp.activate(ignoringOtherApps: true)
-                    }
-                }
-                .onChange(of: appState.needsUpdateAuthorization) { needsUpdate in
-                    if needsUpdate {
-                        openWindow(id: "onboarding")
-                        NSApp.activate(ignoringOtherApps: true)
-                    }
+                        .onChange(of: appState.isReadyToStartBackgroundEngines) { ready in
+                            if ready {
+                                mountManager.startAll()
+                            }
+                        }
+                        .onChange(of: appState.needsErrorAuthorization) { needsAuth in
+                            if needsAuth {
+                                NSApp.activate(ignoringOtherApps: true)
+                                openWindow(id: "onboarding")
+                            }
+                        }
+                        .onChange(of: appState.needsUpdateAuthorization) { needsUpdate in
+                            if needsUpdate {
+                                NSApp.activate(ignoringOtherApps: true)
+                                openWindow(id: "onboarding")
+                            }
+                        }
                 }
         }
 
@@ -527,6 +526,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(macDidSleep), name: NSWorkspace.willSleepNotification, object: nil)
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(macDidWake), name: NSWorkspace.didWakeNotification, object: nil)
+        
+        // Dispatch startup routines after a tiny delay so SwiftUI's View graph is fully registered.
+        // This completely bypasses cases where MenuBarExtra `.onAppear` is truncated by the MacBook Notch.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            NotificationCenter.default.post(name: NSNotification.Name("TriggerStartupAction"), object: nil)
+        }
     }
     
     @objc private func macDidSleep() {
