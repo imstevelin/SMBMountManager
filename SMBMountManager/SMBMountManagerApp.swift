@@ -530,19 +530,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         
         // Protect AMSMB2 sockets from OS suspension crashing:
         // Forcefully pause all TCP chunk downloads immediately.
-        // NSWorkspace notifications are delivered on the main thread, so we must 
-        // NEVER use DispatchQueue.main.sync here (it causes a libdispatch trap).
         Task { @MainActor in
             DownloadManager.shared.pauseAll()
             UploadManager.shared.cancelAllAndShutdown()
             
             // Stop engines to prevent them from trying to reconnect during network teardown
             AppLifecycle.shared.mountManager?.stopAll()
-            
-            // VITAL: Aggressively and synchronously force-unmount all SMB shares BEFORE the system fully sleeps.
-            // This prevents the kernel `mount_smbfs` daemon from deadlocking if the Mac wakes up on a different Wi-Fi network.
-            // Using `unmountAllAndStopSync()` which calls `diskutil unmount force` blindly.
-            AppLifecycle.shared.mountManager?.unmountAllAndStopSync()
+        }
+        
+        // VITAL: Aggressively force-unmount all SMB shares BEFORE the system fully sleeps.
+        // Doing this off the MainActor prevents the app from freezing if the mount is already dead.
+        Task {
+            await AppLifecycle.shared.mountManager?.unmountAllAsync()
         }
     }
     
@@ -556,22 +555,22 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // Let's also proactively clear recent notifications on wake to start fresh
         UNUserNotificationCenter.current().removeAllDeliveredNotifications()
         
-        // Step 1: Forcefully wipe any "ghost mounts" that might have snuck in or survived.
-        // Doing this before starting the network ensures a clean slate.
-        Task { @MainActor in
-            AppLifecycle.shared.mountManager?.unmountAllAndStopSync()
-        }
-        
-        // Step 2: Restart engines and downloads with a delay.
-        // The Mac network stack takes a moment to establish routing on the new Wi-Fi network.
-        Task { @MainActor in
+        Task {
+            // Step 1: Forcefully wipe any "ghost mounts" conceptually off the main thread.
+            // Doing this before starting the network ensures a clean slate, without UI freezes.
+            await AppLifecycle.shared.mountManager?.unmountAllAsync()
+            
+            // Step 2: Restart engines and downloads with a delay.
+            // The Mac network stack takes a moment to establish routing on the new Wi-Fi network.
             try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds delay
             
-            AppLifecycle.shared.mountManager?.startAll()
-            DownloadManager.shared.startAll()
-            
-            // Note: Upload tasks are NOT resumed here blindly.
-            // They will auto-resume per-mount when MountEngine confirms mounts are online.
+            await MainActor.run {
+                AppLifecycle.shared.mountManager?.startAll()
+                DownloadManager.shared.startAll()
+                
+                // Note: Upload tasks are NOT resumed here blindly.
+                // They will auto-resume per-mount when MountEngine confirms mounts are online.
+            }
         }
     }
 

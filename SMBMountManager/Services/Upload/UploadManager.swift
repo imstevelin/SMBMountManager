@@ -264,7 +264,7 @@ class UploadManager: ObservableObject {
             if tasks[index].state == .paused || tasks[index].state == .error {
                 // Only resume if the mount point is actually mounted
                 if let mount = AppLifecycle.shared.mountManager?.mounts.first(where: { $0.id == tasks[index].mountId }) {
-                    guard ChunkUploader.isMountPathActuallyMounted(mount.mountPath) else {
+                    guard MountManager.isMounted(mount.mountPath) else {
                         continue  // Skip — mount not ready
                     }
                 }
@@ -376,7 +376,7 @@ class UploadManager: ObservableObject {
     private func startUploading(task: UploadTaskModel) {
         // Pre-flight check: verify the mount point is actually mounted before starting
         if let mount = AppLifecycle.shared.mountManager?.mounts.first(where: { $0.id == task.mountId }) {
-            guard ChunkUploader.isMountPathActuallyMounted(mount.mountPath) else {
+            guard MountManager.isMounted(mount.mountPath) else {
                 // Mount is not ready — keep task in waiting state so it can be retried later
                 AppLogger.shared.info("[UploadManager] Mount \(mount.name) not ready, deferring task \(task.sourceURL.lastPathComponent)")
                 if let index = tasks.firstIndex(where: { $0.id == task.id }) {

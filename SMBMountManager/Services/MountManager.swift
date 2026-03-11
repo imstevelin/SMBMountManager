@@ -326,6 +326,29 @@ class MountManager: ObservableObject {
         }
     }
 
+    /// Asynchronously force-unmount all SMB shares without blocking the MainActor
+    func unmountAllAsync() async {
+        // Collect paths on the MainActor
+        let paths = await MainActor.run { self.mounts.map { $0.mountPath } }
+        
+        // Spawn unmount processes concurrently off the main thread
+        await withTaskGroup(of: Void.self) { group in
+            for path in paths {
+                group.addTask {
+                    let task = Process()
+                    task.launchPath = "/usr/sbin/diskutil"
+                    task.arguments = ["unmount", "force", path]
+                    task.standardOutput = FileHandle.nullDevice
+                    task.standardError = FileHandle.nullDevice
+                    do {
+                        try task.run()
+                        task.waitUntilExit()
+                    } catch {}
+                }
+            }
+        }
+    }
+
     /// Check if a mount is restricted by its allowed SSIDs on the current network
     func isNetworkRestricted(for mount: MountPoint) -> Bool {
         guard !mount.allowedSSIDs.isEmpty else { return false }
