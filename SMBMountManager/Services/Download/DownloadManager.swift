@@ -76,8 +76,14 @@ class DownloadManager: ObservableObject {
                 for task in self.tasks {
                     if task.state == .downloading {
                         activeTaskIds.insert(task.id)
-                        var tracker = self.speedTrackers[task.id] ?? SpeedTracker(lastBytes: task.downloadedBytes, lastTrackedTime: now)
                         
+                        if self.speedTrackers[task.id] == nil {
+                            // First time tracking this task, save it so 'elapsed' grows next tick
+                            self.speedTrackers[task.id] = SpeedTracker(lastBytes: task.downloadedBytes, lastTrackedTime: now)
+                            continue
+                        }
+                        
+                        var tracker = self.speedTrackers[task.id]!
                         let elapsed = now.timeIntervalSince(tracker.lastTrackedTime)
                         
                         // Only update if at least roughly 1 second has passed

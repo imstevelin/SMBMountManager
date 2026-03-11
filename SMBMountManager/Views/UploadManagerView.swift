@@ -114,6 +114,12 @@ struct UploadManagerView: View {
                 }
             }
         }
+        .onReceive(Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()) { _ in
+            // Heartbeat to prevent macOS App Nap from starving UI updates when mouse isn't hovering
+            if uploadManager.tasks.contains(where: { $0.state == .uploading || $0.state == .waiting }) {
+                uploadManager.objectWillChange.send()
+            }
+        }
     }
     
     private var emptyState: some View {

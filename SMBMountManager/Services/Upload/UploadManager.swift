@@ -69,8 +69,14 @@ class UploadManager: ObservableObject {
                 for task in self.tasks {
                     if task.state == .uploading {
                         activeTaskIds.insert(task.id)
-                        var tracker = self.speedTrackers[task.id] ?? SpeedTracker(lastBytes: task.uploadedBytes, lastTrackedTime: now)
                         
+                        if self.speedTrackers[task.id] == nil {
+                            // First time tracking this task, explicitly save it so 'elapsed' can grow next tick
+                            self.speedTrackers[task.id] = SpeedTracker(lastBytes: task.uploadedBytes, lastTrackedTime: now)
+                            continue
+                        }
+                        
+                        var tracker = self.speedTrackers[task.id]!
                         let elapsed = now.timeIntervalSince(tracker.lastTrackedTime)
                         
                         // Only update if at least roughly 1 second has passed

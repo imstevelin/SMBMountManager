@@ -112,6 +112,12 @@ struct DownloadManagerView: View {
                 }
             }
         }
+        .onReceive(Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()) { _ in
+            // Heartbeat to prevent macOS App Nap from starving UI updates when mouse isn't hovering
+            if downloadManager.tasks.contains(where: { $0.state == .downloading || $0.state == .waiting }) {
+                downloadManager.objectWillChange.send()
+            }
+        }
     }
     
     private var emptyState: some View {
