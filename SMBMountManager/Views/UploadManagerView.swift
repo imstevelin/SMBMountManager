@@ -3,7 +3,6 @@ import SwiftUI
 struct UploadManagerView: View {
     @StateObject private var uploadManager = UploadManager.shared
     @State private var selectedTab: UploadTab = .active
-    @State private var refreshTick: UInt = 0
 
     enum UploadTab: String, CaseIterable, Identifiable {
         case active = "處理中"
@@ -108,20 +107,11 @@ struct UploadManagerView: View {
                     LazyVStack(spacing: 10) {
                         ForEach(filteredTasks) { task in
                             UploadTaskRow(task: task)
-                                .id("\(task.id)-\(refreshTick)")
                         }
                     }
                     .padding(.horizontal, 24)
                     .padding(.vertical, 8)
                 }
-            }
-        }
-        .onReceive(Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()) { _ in
-            // Force SwiftUI to re-render by mutating @State.
-            // An empty .onReceive is optimized away by SwiftUI since no state changes.
-            if uploadManager.tasks.contains(where: { $0.state == .uploading || $0.state == .waiting }) {
-                refreshTick &+= 1
-                uploadManager.objectWillChange.send()
             }
         }
     }
