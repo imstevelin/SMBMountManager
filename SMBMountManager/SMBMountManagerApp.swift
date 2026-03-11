@@ -4,12 +4,29 @@ import Combine
 
 @main
 struct SMBMountManagerApp: App {
-    @StateObject private var mountManager = MountManager()
-    @StateObject private var networkMonitor = NetworkMonitorService()
+    @StateObject private var mountManager: MountManager
+    @StateObject private var networkMonitor: NetworkMonitorService
     @StateObject private var settings = AppSettings.shared
     @StateObject private var appState = AppStateManager.shared
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @Environment(\.openWindow) private var openWindow
+
+    init() {
+        let mm = MountManager()
+        let nm = NetworkMonitorService()
+        _mountManager = StateObject(wrappedValue: mm)
+        _networkMonitor = StateObject(wrappedValue: nm)
+        
+        AppLifecycle.shared.mountManager = mm
+        AppLifecycle.shared.networkMonitor = nm
+
+        nm.onNetworkChanged = { [weak mm] in
+            Task { @MainActor in
+                mm?.handleNetworkChange()
+                DownloadManager.shared.startAll()
+            }
+        }
+    }
 
     var body: some Scene {
         // Menu Bar Extra — always-visible status icon in top menu bar
@@ -18,12 +35,15 @@ struct SMBMountManagerApp: App {
         } label: {
             MenuBarLabel(mountManager: mountManager, settings: settings)
                 .onAppear {
-                    setupAppLifecycle()
-                    if appState.needsOnboarding || appState.needsUpdateAuthorization || appState.needsErrorAuthorization {
-                        openWindow(id: "onboarding")
-                        NSApp.activate(ignoringOtherApps: true)
-                    } else if appState.isReadyToStartBackgroundEngines {
-                        mountManager.startAll()
+                    // Delay window opening slightly to ensure SwiftUI's Scene graph is fully registered.
+                    // Without this, fast Macs might swallow the openWindow command on fresh installs.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        if appState.needsOnboarding || appState.needsUpdateAuthorization || appState.needsErrorAuthorization {
+                            NSApp.activate(ignoringOtherApps: true)
+                            openWindow(id: "onboarding")
+                        } else if appState.isReadyToStartBackgroundEngines {
+                            mountManager.startAll()
+                        }
                     }
                 }
                 .onChange(of: appState.isReadyToStartBackgroundEngines) { ready in
@@ -119,22 +139,6 @@ struct SMBMountManagerApp: App {
                 window.close()
             }
             openWindow(id: "settings")
-        }
-    }
-
-    private func setupAppLifecycle() {
-        guard AppLifecycle.shared.mountManager == nil else { return }
-        
-        // Wire the lifecycle bridge immediately
-        AppLifecycle.shared.mountManager = mountManager
-        AppLifecycle.shared.networkMonitor = networkMonitor
-
-        // Wire network change → remount
-        networkMonitor.onNetworkChanged = { [weak mountManager] in
-            Task { @MainActor in
-                mountManager?.handleNetworkChange()
-                DownloadManager.shared.startAll()
-            }
         }
     }
 }
