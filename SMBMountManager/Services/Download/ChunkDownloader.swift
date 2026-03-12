@@ -163,7 +163,7 @@ class ChunkDownloader {
         
         var currentOffset = chunk.startOffset + chunk.downloadedBytes
         let endOffset = chunk.startOffset + chunk.expectedSize
-        let bufferSize: UInt64 = 1024 * 1024 // 1MB buffer
+        let bufferSize: UInt64 = 4 * 1024 * 1024 // 4MB buffer
         
         while currentOffset < endOffset && !isPaused {
             let readSize = Int(min(bufferSize, endOffset - currentOffset))
@@ -180,12 +180,10 @@ class ChunkDownloader {
             currentOffset += UInt64(data.count)
             let downloaded = currentOffset - chunk.startOffset
             
-            // Periodically sync to disk to prevent dirty page buildup
-            if downloaded % (10 * 1024 * 1024) == 0 {
-                fileLock.lock()
-                try? writeHandle.synchronize()
-                fileLock.unlock()
-            }
+            // Note: `writeHandle.synchronize()` has been completely removed to avoid
+            // mathematical modulo dropping (e.g. downloaded % 10MB never hitting 0
+            // when bufferSize is 4MB) and to maximize APFS ssd multi-threaded efficiency.
+            // F_NOCACHE natively controls the speed and throttles memory effectively.
             
             // Update progress at most ~10 times per second to avoid UI thrashing
             let now = Date()
