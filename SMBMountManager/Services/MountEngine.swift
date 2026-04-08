@@ -80,21 +80,49 @@ actor MountEngine {
             let isOccupied: Bool = await {
                 let task = Process()
                 task.launchPath = "/bin/bash"
-                // Returns 0 if directory exists and NOT empty (excluding .DS_Store), else non-zero
-                // If it finds only .DS_Store, it deletes it and the directory.
+                // Returns 0 if directory is occupied by user files or phantom mounts, else 1
                 task.arguments = ["-c", """
-                if [ -d "\(targetPath)" ]; then
-                    FILES=$(ls -A "\(targetPath)" 2>/dev/null | grep -v '^\\.DS_Store$')
-                    if [ -z "$FILES" ]; then
-                        rm -rf "\(targetPath)" 2>/dev/null
-                        exit 1
-                    else
-                        exit 0
+                TARGET="$1"
+                shopt -s nullglob
+                OCCUPIED=1
+                
+                # 1. Clean up abandoned empty `-X` ghost folders
+                for dir in "$TARGET-"[0-9]*; do
+                    if [ -d "$dir" ]; then
+                        if ! /sbin/mount | grep -qF " on $dir "; then
+                            # Not mounted, safe to check contents
+                            FILES=$(ls -A "$dir" 2>/dev/null | grep -v '^\\.DS_Store$')
+                            if [ -z "$FILES" ]; then
+                                rm -rf "$dir" 2>/dev/null
+                            fi
+                        else
+                            # Active phantom mount
+                            OCCUPIED=0
+                        fi
                     fi
-                else
-                    exit 1
+                done
+                
+                # 2. Check if the primary target path is clear
+                if [ -d "$TARGET" ]; then
+                    if ! /sbin/mount | grep -qF " on $TARGET "; then
+                        # Not mounted
+                        FILES=$(ls -A "$TARGET" 2>/dev/null | grep -v '^\\.DS_Store$')
+                        if [ -z "$FILES" ]; then
+                            # Empty, clean it up
+                            rm -rf "$TARGET" 2>/dev/null
+                        else
+                            # Has files, it's occupied (could be a stale mount or user data)
+                            OCCUPIED=0
+                        fi
+                    else
+                        # Mounted (stale or active, but we only get here if swift thinks it's NOT successfully mounted, 
+                        # so if it is mounted here, it's a stale/ghost mount that needs OS cleanup)
+                        OCCUPIED=0
+                    fi
                 fi
-                """]
+                
+                exit $OCCUPIED
+                """, "--", targetPath]
                 task.standardOutput = FileHandle.nullDevice
                 task.standardError = FileHandle.nullDevice
 
@@ -118,11 +146,19 @@ actor MountEngine {
             }()
 
             if isOccupied {
-                log("[WARN] Mount path \(targetPath) is occupied by a stale session. Attempting OS cleanup...")
+                log("[WARN] Mount path \(targetPath) is occupied by a stale session or phantom mounts. Attempting OS cleanup...")
                 let _ = await Task.detached { [weak self] in
                     let task = Process()
                     task.launchPath = "/bin/bash"
-                    task.arguments = ["-c", "/sbin/umount -f \"\(targetPath)\" || /usr/sbin/diskutil unmount force \"\(targetPath)\" 2>/dev/null"]
+                    task.arguments = ["-c", """
+                    TARGET="$1"
+                    shopt -s nullglob
+                    for dir in "$TARGET" "$TARGET-"[0-9]*; do
+                        if [ -d "$dir" ] || /sbin/mount | grep -qF " on $dir "; then
+                            /sbin/umount -f "$dir" || /usr/sbin/diskutil unmount force "$dir" 2>/dev/null
+                        fi
+                    done
+                    """, "--", targetPath]
                     task.standardOutput = FileHandle.nullDevice
                     task.standardError = FileHandle.nullDevice
                     
