@@ -187,6 +187,7 @@ struct StatusMenuView: View {
         .keyboardShortcut(",", modifiers: .command)
 
         Button {
+            AppLifecycle.shared.isUserInitiatedQuit = true
             AppLifecycle.shared.isTerminating = true
             // Force synchronous unmount before we even tell the OS to begin termination
             mountManager.unmountAllAndStopSync()

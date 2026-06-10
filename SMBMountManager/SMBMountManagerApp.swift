@@ -150,6 +150,7 @@ class AppLifecycle {
     weak var mountManager: MountManager?
     weak var networkMonitor: NetworkMonitorService?
     var isTerminating: Bool = false
+    var isUserInitiatedQuit: Bool = false
     var isSleeping: Bool = false
     var lastWakeTime: Date? = nil
 }
@@ -514,6 +515,18 @@ struct MenuBarLabel: View {
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
+    
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        let args = ProcessInfo.processInfo.arguments
+        AppLogger.shared.info("[Lifecycle] applicationWillFinishLaunching. Args: \(args)")
+        
+        // P2/P0 workaround: Delay if launched at login to let controlcenter / linkd initialize fully
+        if args.contains(where: { $0.contains("-psn") || $0.contains("login") }) {
+            AppLogger.shared.info("[Lifecycle] Detected login/auto start. Delaying 1 second to avoid UI termination bug...")
+            Thread.sleep(forTimeInterval: 1.0)
+        }
+    }
+    
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApplication.shared.servicesProvider = MacServicesProvider()
         NSUpdateDynamicServices()
@@ -530,9 +543,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         
         // Dispatch startup routines after a tiny delay so SwiftUI's View graph is fully registered.
         // This completely bypasses cases where MenuBarExtra `.onAppear` is truncated by the MacBook Notch.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            AppLifecycle.shared.networkMonitor?.startMonitoring()
             NotificationCenter.default.post(name: NSNotification.Name("TriggerStartupAction"), object: nil)
         }
+    }
+    
+    func applicationDidBecomeActive(_ notification: Notification) {
+        // P1: Ensure CoreLocation / network checks start if the user activates the app early
+        AppLifecycle.shared.networkMonitor?.startMonitoring()
     }
     
     @objc private func macDidSleep() {
@@ -585,6 +604,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if !AppLifecycle.shared.isUserInitiatedQuit {
+            AppLogger.shared.info("[Lifecycle] System requested termination. Stack trace: \(Thread.callStackSymbols)")
+            return .terminateCancel
+        }
+        
         AppLifecycle.shared.isTerminating = true
         // Block the main thread entirely to ensure SwiftUI does not kill the app mid-unmount
         AppLifecycle.shared.mountManager?.unmountAllAndStopSync()

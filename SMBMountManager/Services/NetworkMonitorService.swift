@@ -16,11 +16,16 @@ class NetworkMonitorService: ObservableObject {
     private var previousSSID: String?
     var onNetworkChanged: (() -> Void)?
 
+    private var isStarted = false
+
     init() {
-        startMonitoring()
+        // startMonitoring() is intentionally removed from init. 
+        // We delay it until AppDelegate says the app is fully ready.
     }
 
     func startMonitoring() {
+        if isStarted { return }
+        isStarted = true
         monitor.pathUpdateHandler = { [weak self] path in
             Task { @MainActor in
                 guard let self = self else { return }
