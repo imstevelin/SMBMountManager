@@ -35,34 +35,6 @@ struct SMBMountManagerApp: App {
             StatusMenuView(mountManager: mountManager, networkMonitor: networkMonitor)
         } label: {
             MenuBarLabel(mountManager: mountManager, settings: settings)
-                .background {
-                    Color.clear
-                        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("TriggerStartupAction"))) { _ in
-                            if appState.needsOnboarding || appState.needsUpdateAuthorization || appState.needsErrorAuthorization {
-                                NSApp.activate(ignoringOtherApps: true)
-                                openWindow(id: "onboarding")
-                            } else if appState.isReadyToStartBackgroundEngines {
-                                mountManager.startAll()
-                            }
-                        }
-                        .onChange(of: appState.isReadyToStartBackgroundEngines) { ready in
-                            if ready {
-                                mountManager.startAll()
-                            }
-                        }
-                        .onChange(of: appState.needsErrorAuthorization) { needsAuth in
-                            if needsAuth {
-                                NSApp.activate(ignoringOtherApps: true)
-                                openWindow(id: "onboarding")
-                            }
-                        }
-                        .onChange(of: appState.needsUpdateAuthorization) { needsUpdate in
-                            if needsUpdate {
-                                NSApp.activate(ignoringOtherApps: true)
-                                openWindow(id: "onboarding")
-                            }
-                        }
-                }
         }
 
         // Onboarding / Authorization Window (Exclusive & Disconnected from Settings)
@@ -255,35 +227,48 @@ struct MenuBarLabel: View {
     @ObservedObject var mountManager: MountManager
     @ObservedObject var settings: AppSettings
     @StateObject private var progressManager = TransferProgressManager.shared
+    @StateObject private var appState = AppStateManager.shared
 
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        HStack(spacing: 3) {
+        Label {
+            if progressManager.hasSessionTasks && progressManager.isActive {
+                Text("\(Int(progressManager.overallProgress * 100))%")
+            } else if settings.showMountCount && !mountManager.mounts.isEmpty {
+                let connected = mountManager.statuses.values.filter { $0.isMounted && $0.isResponsive }.count
+                let total = mountManager.mounts.count
+                Text("\(connected)/\(total)")
+            } else {
+                Text("")
+            }
+        } icon: {
             if progressManager.hasSessionTasks {
                 Image(nsImage: .downloadProgressRing(progress: progressManager.overallProgress, isPaused: progressManager.isPaused))
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(height: 14)
-                
-                if progressManager.isActive {
-                    Text("\(Int(progressManager.overallProgress * 100))%")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                }
             } else {
                 Image(systemName: mountManager.overallStatusIcon)
-                
-                if settings.showMountCount && !mountManager.mounts.isEmpty {
-                    let connected = mountManager.statuses.values.filter { $0.isMounted && $0.isResponsive }.count
-                    let total = mountManager.mounts.count
-                    Text("\(connected)/\(total)")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenMainWindow"))) { _ in
             NSApp.activate(ignoringOtherApps: true)
             openWindow(id: "settings")
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("TriggerStartupAction"))) { _ in
+            if appState.needsOnboarding || appState.needsUpdateAuthorization || appState.needsErrorAuthorization {
+                NSApp.activate(ignoringOtherApps: true)
+                openWindow(id: "onboarding")
+            } else if appState.isReadyToStartBackgroundEngines {
+                mountManager.startAll()
+            }
+        }
+        .onChange(of: appState.isReadyToStartBackgroundEngines) { ready in
+            if ready { mountManager.startAll() }
+        }
+        .onChange(of: appState.needsErrorAuthorization) { needsAuth in
+            if needsAuth { NSApp.activate(ignoringOtherApps: true); openWindow(id: "onboarding") }
+        }
+        .onChange(of: appState.needsUpdateAuthorization) { needsUpdate in
+            if needsUpdate { NSApp.activate(ignoringOtherApps: true); openWindow(id: "onboarding") }
         }
     }
 }
