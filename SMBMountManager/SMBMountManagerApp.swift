@@ -8,6 +8,7 @@ struct SMBMountManagerApp: App {
     @StateObject private var networkMonitor: NetworkMonitorService
     @StateObject private var settings = AppSettings.shared
     @StateObject private var appState = AppStateManager.shared
+    @StateObject private var progressManager = TransferProgressManager.shared
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @Environment(\.openWindow) private var openWindow
 
@@ -19,6 +20,7 @@ struct SMBMountManagerApp: App {
         
         AppLifecycle.shared.mountManager = mm
         AppLifecycle.shared.networkMonitor = nm
+        mm.bindNetworkMonitor(nm)
 
         nm.onNetworkChanged = { [weak mm] in
             Task { @MainActor in
@@ -34,39 +36,29 @@ struct SMBMountManagerApp: App {
         MenuBarExtra {
             StatusMenuView(mountManager: mountManager, networkMonitor: networkMonitor)
         } label: {
-            MenuBarLabel(mountManager: mountManager, settings: settings)
-                .background {
-                    Color.clear
-                        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("TriggerStartupAction"))) { _ in
-                            if appState.needsOnboarding || appState.needsUpdateAuthorization || appState.needsErrorAuthorization {
-                                NSApp.activate(ignoringOtherApps: true)
-                                openWindow(id: "onboarding")
-                            } else if appState.isReadyToStartBackgroundEngines {
-                                mountManager.startAll()
-                            }
-                        }
-                        .onChange(of: appState.isReadyToStartBackgroundEngines) { ready in
-                            if ready {
-                                mountManager.startAll()
-                            }
-                        }
-                        .onChange(of: appState.needsErrorAuthorization) { needsAuth in
-                            if needsAuth {
-                                NSApp.activate(ignoringOtherApps: true)
-                                openWindow(id: "onboarding")
-                            }
-                        }
-                        .onChange(of: appState.needsUpdateAuthorization) { needsUpdate in
-                            if needsUpdate {
-                                NSApp.activate(ignoringOtherApps: true)
-                                openWindow(id: "onboarding")
-                            }
-                        }
-                }
+            MenuBarLabel(
+                statusIcon: mountManager.overallStatusIcon,
+                mountCount: mountManager.mounts.count,
+                connectedCount: mountManager.statuses.values.filter { $0.isMounted && $0.isResponsive }.count,
+                showMountCount: settings.showMountCount,
+                hasSessionTasks: progressManager.hasSessionTasks,
+                overallProgress: progressManager.overallProgress,
+                isPaused: progressManager.isPaused,
+                isActive: progressManager.isActive
+            )
+        }
+        .onChange(of: appState.isReadyToStartBackgroundEngines) { _, ready in
+            if ready { mountManager.startAll() }
+        }
+        .onChange(of: appState.needsErrorAuthorization) { _, needsAuth in
+            if needsAuth { NSApp.activate(ignoringOtherApps: true); openWindow(id: "onboarding") }
+        }
+        .onChange(of: appState.needsUpdateAuthorization) { _, needsUpdate in
+            if needsUpdate { NSApp.activate(ignoringOtherApps: true); openWindow(id: "onboarding") }
         }
 
         // Onboarding / Authorization Window (Exclusive & Disconnected from Settings)
-        Window("SMB 掛載管理器", id: "onboarding") {
+        Window("SMB 自動掛載工具", id: "onboarding") {
             if appState.needsOnboarding {
                 OnboardingView()
                     .environmentObject(appState)
@@ -87,7 +79,7 @@ struct SMBMountManagerApp: App {
                             .frame(width: 96, height: 96)
                     }
 
-                    Text("SMB 掛載管理器：密碼讀取異常 ⚠️")
+                    Text("SMB 自動掛載工具：密碼讀取異常 ⚠️")
                         .font(.system(size: 22, weight: .bold))
                         .padding(.top, 16)
 
@@ -101,8 +93,12 @@ struct SMBMountManagerApp: App {
 
                     Button(action: {
                         KeychainService.allowUI = true
-                        appState.completeErrorAuthorization()
-                        checkAndTransitionToSettings()
+                        let result = KeychainService.testKeychainAccess()
+                        KeychainService.allowUI = false
+                        if result.canRead {
+                            appState.completeErrorAuthorization()
+                            checkAndTransitionToSettings()
+                        }
                     }) {
                         HStack(spacing: 6) {
                             Image(systemName: "wrench.and.screwdriver.fill")
@@ -122,7 +118,7 @@ struct SMBMountManagerApp: App {
         .windowResizability(.contentSize)
 
         // Main Settings Window
-        Window("SMB 掛載管理器", id: "settings") {
+        Window("SMB 自動掛載工具", id: "settings") {
             MainSettingsView(mountManager: mountManager, networkMonitor: networkMonitor)
                 .environmentObject(settings)
                 .environmentObject(appState)
@@ -130,7 +126,7 @@ struct SMBMountManagerApp: App {
         }
         .defaultSize(width: 860, height: 640)
     }
-    
+
     /// Called when an onboarding or auth flow finishes to see if we should open settings
     private func checkAndTransitionToSettings() {
         if appState.isReadyToStartBackgroundEngines {
@@ -145,7 +141,8 @@ struct SMBMountManagerApp: App {
 
 // MARK: - App Lifecycle Singleton (bridges AppDelegate ↔ SwiftUI)
 
-class AppLifecycle {
+@MainActor
+final class AppLifecycle {
     static let shared = AppLifecycle()
     weak var mountManager: MountManager?
     weak var networkMonitor: NetworkMonitorService?
@@ -173,6 +170,7 @@ class TransferProgressManager: ObservableObject {
     
     private init() {
         Publishers.CombineLatest(DownloadManager.shared.$tasks, UploadManager.shared.$tasks)
+            .throttle(for: .seconds(0.5), scheduler: RunLoop.main, latest: true)
             .receive(on: RunLoop.main)
             .sink { [weak self] dlTasks, ulTasks in
                 self?.recalculate(dlTasks: dlTasks, ulTasks: ulTasks)
@@ -233,57 +231,82 @@ class TransferProgressManager: ObservableObject {
             }
             
             self.lastTotalBytes = totalBytes
-            self.overallProgress = highestProgress
-            self.isActive = currentIsActive
-            self.isPaused = currentIsPaused
-            self.hasSessionTasks = true
+            // Only publish when values actually change to prevent SwiftUI re-evaluation storms
+            if self.overallProgress != highestProgress { self.overallProgress = highestProgress }
+            if self.isActive != currentIsActive { self.isActive = currentIsActive }
+            if self.isPaused != currentIsPaused { self.isPaused = currentIsPaused }
+            if !self.hasSessionTasks { self.hasSessionTasks = true }
         } else {
-            self.isActive = false
-            self.isPaused = false
-            self.overallProgress = 0.0
+            if self.isActive != false { self.isActive = false }
+            if self.isPaused != false { self.isPaused = false }
+            if self.overallProgress != 0.0 { self.overallProgress = 0.0 }
             self.highestProgress = 0.0
             self.lastTotalBytes = 0
-            self.hasSessionTasks = false
+            if self.hasSessionTasks != false { self.hasSessionTasks = false }
         }
     }
 }
 
-// MARK: - Menu Bar Label (animated icon + connection count)
+// MARK: - Menu Bar Label (value-type driven, no @ObservedObject)
 
 struct MenuBarLabel: View {
-    @ObservedObject var mountManager: MountManager
-    @ObservedObject var settings: AppSettings
-    @StateObject private var progressManager = TransferProgressManager.shared
+    // Value-type parameters only — MenuBarLabel re-evaluates only when these values actually change
+    let statusIcon: String
+    let mountCount: Int
+    let connectedCount: Int
+    let showMountCount: Bool
+    let hasSessionTasks: Bool
+    let overallProgress: Double
+    let isPaused: Bool
+    let isActive: Bool
 
+    @StateObject private var appState = AppStateManager.shared
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        HStack(spacing: 3) {
-            if progressManager.hasSessionTasks {
-                Image(nsImage: .downloadProgressRing(progress: progressManager.overallProgress, isPaused: progressManager.isPaused))
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(height: 14)
-                
-                if progressManager.isActive {
-                    Text("\(Int(progressManager.overallProgress * 100))%")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                }
+        Label {
+            if hasSessionTasks && isActive {
+                Text("\(Int(overallProgress * 100))%")
+            } else if showMountCount && mountCount > 0 {
+                Text("\(connectedCount)/\(mountCount)")
             } else {
-                Image(systemName: mountManager.overallStatusIcon)
-                
-                if settings.showMountCount && !mountManager.mounts.isEmpty {
-                    let connected = mountManager.statuses.values.filter { $0.isMounted && $0.isResponsive }.count
-                    let total = mountManager.mounts.count
-                    Text("\(connected)/\(total)")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                }
+                Text("")
+            }
+        } icon: {
+            if hasSessionTasks {
+                Image(nsImage: Self.cachedProgressRing(
+                    progress: overallProgress, isPaused: isPaused))
+            } else {
+                Image(systemName: statusIcon)
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenMainWindow"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .openMainWindow)) { _ in
             NSApp.activate(ignoringOtherApps: true)
             openWindow(id: "settings")
         }
+        .onReceive(NotificationCenter.default.publisher(for: .triggerStartupAction)) { _ in
+            if appState.needsOnboarding || appState.needsUpdateAuthorization || appState.needsErrorAuthorization {
+                NSApp.activate(ignoringOtherApps: true)
+                openWindow(id: "onboarding")
+            } else if appState.isReadyToStartBackgroundEngines {
+                AppLifecycle.shared.mountManager?.startAll()
+            }
+        }
+    }
+
+    // NSImage cache: reuse the same NSImage for the same quantized progress + pause state,
+    // preventing SwiftUI from seeing a new reference on every body evaluation.
+    private static var imageCache: (progress: Int, isPaused: Bool, image: NSImage)?
+
+    static func cachedProgressRing(progress: Double, isPaused: Bool) -> NSImage {
+        let quantized = Int((progress * 100).rounded())
+        if let cached = imageCache,
+           cached.progress == quantized && cached.isPaused == isPaused {
+            return cached.image
+        }
+        let img = NSImage.downloadProgressRing(progress: progress, isPaused: isPaused)
+        imageCache = (quantized, isPaused, img)
+        return img
     }
 }
 
@@ -305,7 +328,9 @@ struct MenuBarLabel: View {
             Task { @MainActor in
                 // Try to match the path to a known mount
                 if let mountManager = AppLifecycle.shared.mountManager {
-                    if let mount = mountManager.mounts.first(where: { path.hasPrefix($0.mountPath) }) {
+                    if let mount = mountManager.mounts.first(where: {
+                        path == $0.mountPath || path.hasPrefix($0.mountPath + "/")
+                    }) {
                         var isDirectory: ObjCBool = false
                         guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) else {
                             AppLogger.shared.error("[Services] File does not exist at path: \(path)")
@@ -348,7 +373,7 @@ struct MenuBarLabel: View {
                                     
                                     // Recursively find all files
                                     if let enumerator = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey]) {
-                                        for case let fileURL as URL in enumerator {
+                                        while let fileURL = enumerator.nextObject() as? URL {
                                             do {
                                                 let resourceValues = try fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
                                                 if resourceValues.isRegularFile == true && fileURL.lastPathComponent != ".DS_Store" {
@@ -380,10 +405,11 @@ struct MenuBarLabel: View {
                                         }
                                     }
                                     
+                                    let finalBatchTasks = batchTasks
                                     await MainActor.run {
-                                        DownloadManager.shared.addTasks(batch: batchTasks)
-                                        NotificationService.sendDownloadStarted(rootName: url.lastPathComponent, fileCount: batchTasks.count)
-                                        print("[Services] Started folder download for \(url.lastPathComponent) to \(targetFolderURL.path) with \(batchTasks.count) items")
+                                        DownloadManager.shared.addTasks(batch: finalBatchTasks)
+                                        NotificationService.sendDownloadStarted(rootName: url.lastPathComponent, fileCount: finalBatchTasks.count)
+                                        print("[Services] Started folder download for \(url.lastPathComponent) to \(targetFolderURL.path) with \(finalBatchTasks.count) items")
                                     }
                                 }
                             } else {
@@ -455,7 +481,9 @@ struct MenuBarLabel: View {
             
             if modalResult == .OK, let destinationURL = openPanel.url {
                  guard let mountManager = AppLifecycle.shared.mountManager,
-                       let mount = mountManager.mounts.first(where: { destinationURL.path.hasPrefix($0.mountPath) }) else {
+                       let mount = mountManager.mounts.first(where: {
+                           destinationURL.path == $0.mountPath || destinationURL.path.hasPrefix($0.mountPath + "/")
+                       }) else {
                      let alert = NSAlert()
                      alert.messageText = "無效的目的地"
                      alert.informativeText = "您所選擇的目錄不屬於任何已知的 SMB 掛載點。"
@@ -476,7 +504,7 @@ struct MenuBarLabel: View {
                          
                          if isDirectory.boolValue {
                              if let enumerator = FileManager.default.enumerator(at: localURL, includingPropertiesForKeys: [.isRegularFileKey]) {
-                                 for case let fileURL as URL in enumerator {
+                                 while let fileURL = enumerator.nextObject() as? URL {
                                      do {
                                          let resourceValues = try fileURL.resourceValues(forKeys: [.isRegularFileKey])
                                          if resourceValues.isRegularFile == true && fileURL.lastPathComponent != ".DS_Store" {
@@ -500,12 +528,13 @@ struct MenuBarLabel: View {
                          }
                      }
                      
+                     let finalBatchTasks = batchTasks
                      await MainActor.run {
-                         UploadManager.shared.addTasks(batch: batchTasks)
+                         UploadManager.shared.addTasks(batch: finalBatchTasks)
                          // Send a single notification for the entire batch
                          let rootNames = urls.map { $0.lastPathComponent }
                          let displayName = rootNames.count == 1 ? rootNames[0] : rootNames[0]
-                         NotificationService.sendUploadStarted(rootName: displayName, fileCount: batchTasks.count)
+                         NotificationService.sendUploadStarted(rootName: displayName, fileCount: finalBatchTasks.count)
                      }
                  }
             }
@@ -513,31 +542,67 @@ struct MenuBarLabel: View {
     }
 }
 
+@MainActor
 class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
+
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        let args = ProcessInfo.processInfo.arguments
+        AppLogger.shared.info("[Lifecycle] applicationWillFinishLaunching. Args: \(args)")
+
+        // P2/P0 workaround: Delay if launched at login to let controlcenter / linkd initialize fully
+        if args.contains(where: { $0.contains("-psn") || $0.contains("login") }) {
+            AppLogger.shared.info("[Lifecycle] Detected login/auto start. Delaying 1 second to avoid UI termination bug...")
+            Thread.sleep(forTimeInterval: 1.0)
+        }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApplication.shared.servicesProvider = MacServicesProvider()
-        NSUpdateDynamicServices()
-        
+        AppLogger.shared.info("[Lifecycle] applicationDidFinishLaunching")
+
         UNUserNotificationCenter.current().delegate = self
         NotificationService.requestPermission()
-        
+
         if AppSettings.shared.autoCheckUpdates {
             UpdateService.shared.checkForUpdates(silent: true)
         }
-        
+
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(macDidSleep), name: NSWorkspace.willSleepNotification, object: nil)
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(macDidWake), name: NSWorkspace.didWakeNotification, object: nil)
         
-        // Dispatch startup routines after a tiny delay so SwiftUI's View graph is fully registered.
-        // This completely bypasses cases where MenuBarExtra `.onAppear` is truncated by the MacBook Notch.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            NotificationCenter.default.post(name: NSNotification.Name("TriggerStartupAction"), object: nil)
+        // Dispatch after SwiftUI has installed the scene observers. The receiver owns
+        // `openWindow`, which is the only reliable way to create a Window scene that
+        // does not exist yet.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            AppLifecycle.shared.networkMonitor?.startMonitoring()
+            NotificationCenter.default.post(name: .triggerStartupAction, object: nil)
         }
     }
-    
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        // P1: Ensure CoreLocation / network checks start if the user activates the app early
+        AppLifecycle.shared.networkMonitor?.startMonitoring()
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        // Intercept Dock icon click to prevent macOS from triggering its default
+        // window-creation behavior, which causes CPU spikes and menu bar flickering.
+        // Instead, we open the settings window directly.
+        if !flag {
+            NSApp.activate(ignoringOtherApps: true)
+            DispatchQueue.main.async {
+                if let existingWindow = NSApp.windows.first(where: { $0.identifier?.rawValue == "settings" }) {
+                    existingWindow.makeKeyAndOrderFront(nil)
+                } else {
+                    NotificationCenter.default.post(name: .openMainWindow, object: nil)
+                }
+            }
+        }
+        return false // Prevent macOS default behavior (creating/showing windows on its own)
+    }
+
     @objc private func macDidSleep() {
         AppLifecycle.shared.isSleeping = true
-        
+
         // Protect AMSMB2 sockets from OS suspension crashing:
         // Forcefully pause all TCP chunk downloads immediately.
         Task { @MainActor in
@@ -585,20 +650,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard !AppLifecycle.shared.isTerminating else { return .terminateNow }
         AppLifecycle.shared.isTerminating = true
-        // Block the main thread entirely to ensure SwiftUI does not kill the app mid-unmount
+        AppLogger.shared.info("[Lifecycle] Application is terminating; stopping engines and unmounting shares")
         AppLifecycle.shared.mountManager?.unmountAllAndStopSync()
         return .terminateNow
     }
 
-    func userNotificationCenter(_ center: UNUserNotificationCenter,
-                                didReceive response: UNNotificationResponse,
-                                withCompletionHandler completionHandler: @escaping () -> Void) {
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                            didReceive response: UNNotificationResponse,
+                                            withCompletionHandler completionHandler: @escaping () -> Void) {
         
         let id = response.notification.request.identifier
         
         DispatchQueue.main.async {
-            NotificationCenter.default.post(name: NSNotification.Name("OpenMainWindow"), object: nil)
+            NotificationCenter.default.post(name: .openMainWindow, object: nil)
             
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 if id.starts(with: "dl_") {
@@ -614,11 +680,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         completionHandler()
     }
 
-    func userNotificationCenter(_ center: UNUserNotificationCenter,
-                                willPresent notification: UNNotification,
-                                withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                            willPresent notification: UNNotification,
+                                            withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         completionHandler([.banner, .sound])
     }
+}
+
+extension Notification.Name {
+    static let openMainWindow = Notification.Name("OpenMainWindow")
+    static let triggerStartupAction = Notification.Name("TriggerStartupAction")
 }
 
 // MARK: - Progress Ring Graphics Context Extension

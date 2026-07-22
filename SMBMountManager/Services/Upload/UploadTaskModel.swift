@@ -1,6 +1,6 @@
 import Foundation
 
-enum UploadState: String, Codable, Equatable {
+enum UploadState: String, Codable, Equatable, Sendable {
     case waiting
     case uploading
     case paused
@@ -8,7 +8,7 @@ enum UploadState: String, Codable, Equatable {
     case error
 }
 
-struct UploadTaskModel: Codable, Identifiable, Equatable {
+struct UploadTaskModel: Codable, Identifiable, Equatable, Sendable {
     var id: UUID
     var sourceURL: URL               // The local file path on the Mac
     var mountId: String              // To fetch credentials and server info from MountManager

@@ -16,7 +16,7 @@ class DownloadManager: ObservableObject {
     @Published var tasks: [DownloadTaskModel] = []
     
     private let storageURL: URL
-    private let queue = DispatchQueue(label: "org.imstevelin.DownloadManager", attributes: .concurrent)
+    private let queue = DispatchQueue(label: "org.imstevelin.SMBMountClientV3.download", attributes: .concurrent)
     
     // Add max concurrent task limit
     private let maxConcurrentTasks = 5
@@ -42,9 +42,14 @@ class DownloadManager: ObservableObject {
     
     private init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let managerDir = appSupport.appendingPathComponent("SMBMountManager/Downloads")
+        let managerDir = appSupport.appendingPathComponent("SMBMountClientV3/Downloads")
         try? FileManager.default.createDirectory(at: managerDir, withIntermediateDirectories: true)
         self.storageURL = managerDir.appendingPathComponent("tasks.json")
+        let legacyURL = appSupport.appendingPathComponent("SMBMountManager/Downloads/tasks.json")
+        if !FileManager.default.fileExists(atPath: storageURL.path),
+           FileManager.default.fileExists(atPath: legacyURL.path) {
+            try? FileManager.default.copyItem(at: legacyURL, to: storageURL)
+        }
         
         loadTasks()
         startSpeedMeasurement()
@@ -66,7 +71,7 @@ class DownloadManager: ObservableObject {
         
         // Sample every 1 second for stable byte deltas
         let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
-            DispatchQueue.main.async {
+            Task { @MainActor [weak self] in
                 guard let self = self else { return }
                 let now = Date()
                 
@@ -141,10 +146,14 @@ class DownloadManager: ObservableObject {
                     self.taskETASpeeds.removeValue(forKey: id)
                 }
                 
+                let hadActiveTasks = self.currentSpeedBytesPerSecond > 0 || !activeTaskIds.isEmpty
                 self.currentSpeedBytesPerSecond = totalGlobalSpeed
                 
                 // CRITICAL: Notify SwiftUI that dictionary values (speed, ETA) have changed so the UI updates
-                self.objectWillChange.send()
+                // OPTIMIZATION: Only notify if there are active tasks or speed just dropped to 0 to prevent 100% idle CPU
+                if !activeTaskIds.isEmpty || hadActiveTasks {
+                    self.objectWillChange.send()
+                }
             }
         }
         RunLoop.main.add(timer, forMode: .common)
@@ -250,7 +259,7 @@ class DownloadManager: ObservableObject {
         
         let taskModel = tasks[index] // It already does this!
         let downloader = ChunkDownloader(task: taskModel) { [weak self] updatedTask in
-            DispatchQueue.main.async {
+            Task { @MainActor [weak self] in
                 self?.updateTask(updatedTask)
             }
         }
@@ -267,34 +276,22 @@ class DownloadManager: ObservableObject {
         AppLogger.shared.info("[DownloadManager] Paused task: \(tasks[index].fileName)")
         saveTasks()
         
-        Task {
-            await downloaders[id]?.pause()
-            DispatchQueue.main.async {
-                self.downloaders.removeValue(forKey: id)
-                self.processQueue() // Pick up another task if available
-            }
-        }
+        downloaders[id]?.pause()
+        downloaders.removeValue(forKey: id)
+        processQueue()
     }
     
     func cancelTask(id: UUID) {
-        Task {
-            await downloaders[id]?.pause()
-            
-            DispatchQueue.main.async {
-                guard let index = self.tasks.firstIndex(where: { $0.id == id }) else { return }
-                
-                // Only remove partial file if it's not completed
-                if self.tasks[index].state != .completed {
-                    let dest = self.tasks[index].destinationURL
-                    try? FileManager.default.removeItem(at: dest)
-                }
-                
-                self.tasks.remove(at: index)
-                self.downloaders.removeValue(forKey: id)
-                self.saveTasks()
-                self.processQueue() // Pick up next queued task
-            }
+        downloaders[id]?.pause()
+        guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
+
+        if tasks[index].state != .completed {
+            try? FileManager.default.removeItem(at: tasks[index].destinationURL)
         }
+        tasks.remove(at: index)
+        downloaders.removeValue(forKey: id)
+        saveTasks()
+        processQueue()
     }
     
     // MARK: - Global Controls
@@ -316,53 +313,26 @@ class DownloadManager: ObservableObject {
         }
         self.saveTasks()
         
-        Task {
-            await withTaskGroup(of: Void.self) { group in
-                for id in taskIdsToPause {
-                    if let downloader = self.downloaders[id] {
-                        group.addTask { await downloader.pause() }
-                    }
-                }
-            }
-            await MainActor.run {
-                for id in taskIdsToPause {
-                    self.downloaders.removeValue(forKey: id)
-                }
-                self.isPausingAll = false
-                self.processQueue()
-            }
+        for id in taskIdsToPause {
+            downloaders[id]?.pause()
+            downloaders.removeValue(forKey: id)
         }
+        isPausingAll = false
+        processQueue()
     }
     
     func deleteAllActive() {
         let activeTasks = tasks.filter { $0.state != .completed }
         guard !activeTasks.isEmpty else { return }
         
-        Task {
-            // Pause all active downloads concurrently
-            await withTaskGroup(of: Void.self) { group in
-                for task in activeTasks {
-                    if let downloader = downloaders[task.id] {
-                        group.addTask {
-                            await downloader.pause()
-                        }
-                    }
-                }
-            }
-            
-            // Perform batch update on the main thread
-            DispatchQueue.main.async {
-                for task in activeTasks {
-                    let dest = task.destinationURL
-                    try? FileManager.default.removeItem(at: dest)
-                    self.downloaders.removeValue(forKey: task.id)
-                }
-                
-                self.tasks.removeAll { $0.state != .completed }
-                self.saveTasks()
-                self.processQueue()
-            }
+        for task in activeTasks {
+            downloaders[task.id]?.pause()
+            try? FileManager.default.removeItem(at: task.destinationURL)
+            downloaders.removeValue(forKey: task.id)
         }
+        tasks.removeAll { $0.state != .completed }
+        saveTasks()
+        processQueue()
     }
     
     func clearAllCompleted() {

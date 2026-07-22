@@ -24,6 +24,7 @@
 		6FAE3BD455C993782569253C /* FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52B42D8C4FFCE43BFB732D60 /* FlowLayout.swift */; };
 		7C89FAF932A712856C6CA980 /* ChunkUploader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12E60CC529F45EE3D4866AB9 /* ChunkUploader.swift */; };
 		8DDF9D0F46316D69E5B89357 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EB9EF70AA8674397F41E19F /* KeychainService.swift */; };
+		A0D5271A344477A4BEE513EA /* SMBMountManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE5BEE87C13BCC937E62F52B /* SMBMountManagerTests.swift */; };
 		A4729C355B30373083C9FC94 /* AppStateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EFB5385E4B1E5CC845F6753 /* AppStateManager.swift */; };
 		A4829A57AE1BEF5229652447 /* UpdateAuthorizationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1360B7CBA3855D353E68F8A4 /* UpdateAuthorizationView.swift */; };
 		AC1C5C1587BD789C6220A9FB /* ChunkDownloader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62757932EC63BF3C15A19681 /* ChunkDownloader.swift */; };
@@ -32,6 +33,7 @@
 		B5087423F235BBAB2B71B8AE /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78E710F648AA956EA391EFF0 /* NotificationService.swift */; };
 		B7CB8FFA445C91FC6EB4EF4A /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47AB499CA98C0056F31AD88B /* AppLogger.swift */; };
 		D679095C78C97DEE12465AA4 /* AddMountSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E51E1DDA12FC388C46B956C /* AddMountSheet.swift */; };
+		D8B8A87D7A8A6E611435E8B0 /* SMBConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C786322F110961FFAB59DDB /* SMBConnection.swift */; };
 		DB5885B6EFA19DB059B04D00 /* MainSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69902506107BC8BCCFA6E9CA /* MainSettingsView.swift */; };
 		DC2E710C10A9D337E0902B57 /* ConnectionTestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BDFF8FB7D5E686C6A2580FE /* ConnectionTestView.swift */; };
 		DEBE0DF463448635BC0C4B9F /* DownloadManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E3693372BD6E13C0FF26E66 /* DownloadManagerView.swift */; };
@@ -39,6 +41,16 @@
 		ECA60DDE60CB3868ED2A2146 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A795F624CFF44AB853281CFA /* AppSettings.swift */; };
 		F06345BF2FEB5DE95C4A96B0 /* NetworkMonitorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C15D4F5A096E60078BE7292 /* NetworkMonitorService.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		86BD4EC12C6A63D96B590259 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A32D6EA7ABAF315053E5143C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 57871BCAD6B1FF1172B869B4;
+			remoteInfo = SMBMountManager;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		01A0C3DE84B1D8FD82683AEF /* MountDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MountDetailView.swift; sourceTree = "<group>"; };
@@ -51,6 +63,7 @@
 		2F2BE2E966357301663AF2E6 /* MountEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MountEngine.swift; sourceTree = "<group>"; };
 		3B0E17451A928E5ABFED4803 /* UploadManagerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadManagerView.swift; sourceTree = "<group>"; };
 		3BDFF8FB7D5E686C6A2580FE /* ConnectionTestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionTestView.swift; sourceTree = "<group>"; };
+		3C786322F110961FFAB59DDB /* SMBConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMBConnection.swift; sourceTree = "<group>"; };
 		47AB499CA98C0056F31AD88B /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
 		4EFB5385E4B1E5CC845F6753 /* AppStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateManager.swift; sourceTree = "<group>"; };
 		52B42D8C4FFCE43BFB732D60 /* FlowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowLayout.swift; sourceTree = "<group>"; };
@@ -65,6 +78,7 @@
 		7CE2C22274E42F3D162681B3 /* LaunchdService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchdService.swift; sourceTree = "<group>"; };
 		7EB9EF70AA8674397F41E19F /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
 		8487FF49C416CEFB6757182D /* UpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateService.swift; sourceTree = "<group>"; };
+		86515232D49C8E9C88BB7923 /* SMBMountManagerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SMBMountManagerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		923DA3E4CEBF71A96FE55B01 /* UploadTaskModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadTaskModel.swift; sourceTree = "<group>"; };
 		9E3693372BD6E13C0FF26E66 /* DownloadManagerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadManagerView.swift; sourceTree = "<group>"; };
 		A795F624CFF44AB853281CFA /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
@@ -72,6 +86,7 @@
 		C344C0B09CC2F559CD2E7917 /* MountManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MountManager.swift; sourceTree = "<group>"; };
 		C58FF20E6A4A091894B3D0C7 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		C8984E3A72C567E843FA0B64 /* SMBMountManager.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SMBMountManager.entitlements; sourceTree = "<group>"; };
+		CE5BEE87C13BCC937E62F52B /* SMBMountManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMBMountManagerTests.swift; sourceTree = "<group>"; };
 		F1CBD898351825B135B25D81 /* SMBMountManagerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMBMountManagerApp.swift; sourceTree = "<group>"; };
 		F3002A4AF23CC569AF519D66 /* WiFiService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WiFiService.swift; sourceTree = "<group>"; };
 		F6D7EF9348837A6D38CEC329 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -82,6 +97,7 @@
 			isa = PBXGroup;
 			children = (
 				5F53BFEF01C789D7840359BE /* SMBMountManager.app */,
+				86515232D49C8E9C88BB7923 /* SMBMountManagerTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -96,10 +112,19 @@
 			path = Download;
 			sourceTree = "<group>";
 		};
+		5CFE1B0F9DD66A37E6095D3D /* SMBMountManagerTests */ = {
+			isa = PBXGroup;
+			children = (
+				CE5BEE87C13BCC937E62F52B /* SMBMountManagerTests.swift */,
+			);
+			path = SMBMountManagerTests;
+			sourceTree = "<group>";
+		};
 		7EF96CCBA6A40E2946A3D00D = {
 			isa = PBXGroup;
 			children = (
 				D826A5CB048F68C7E580E1B3 /* SMBMountManager */,
+				5CFE1B0F9DD66A37E6095D3D /* SMBMountManagerTests */,
 				11DED98CE19FCFBF648AE5D4 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -133,6 +158,7 @@
 				C344C0B09CC2F559CD2E7917 /* MountManager.swift */,
 				7C15D4F5A096E60078BE7292 /* NetworkMonitorService.swift */,
 				78E710F648AA956EA391EFF0 /* NotificationService.swift */,
+				3C786322F110961FFAB59DDB /* SMBConnection.swift */,
 				8487FF49C416CEFB6757182D /* UpdateService.swift */,
 				F3002A4AF23CC569AF519D66 /* WiFiService.swift */,
 				265020F7F67172BFE011AB02 /* Download */,
@@ -203,6 +229,24 @@
 			productReference = 5F53BFEF01C789D7840359BE /* SMBMountManager.app */;
 			productType = "com.apple.product-type.application";
 		};
+		FE4EFD880E129BDF4E7E183F /* SMBMountManagerTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B191D6FA8AB81A71E80382CB /* Build configuration list for PBXNativeTarget "SMBMountManagerTests" */;
+			buildPhases = (
+				6A61FC9907C252A0C5D9E1D5 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D3FDF04287579482E4E5933A /* PBXTargetDependency */,
+			);
+			name = SMBMountManagerTests;
+			packageProductDependencies = (
+			);
+			productName = SMBMountManagerTests;
+			productReference = 86515232D49C8E9C88BB7923 /* SMBMountManagerTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -211,6 +255,12 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					57871BCAD6B1FF1172B869B4 = {
+						DevelopmentTeam = X9X6NCYV6F;
+						ProvisioningStyle = Automatic;
+					};
+				};
 			};
 			buildConfigurationList = B0E9BD4D3EF572693247B916 /* Build configuration list for PBXProject "SMBMountManager" */;
 			compatibilityVersion = "Xcode 14.0";
@@ -227,6 +277,7 @@
 			projectRoot = "";
 			targets = (
 				57871BCAD6B1FF1172B869B4 /* SMBMountManager */,
+				FE4EFD880E129BDF4E7E183F /* SMBMountManagerTests */,
 			);
 		};
 /* End PBXProject section */
@@ -269,6 +320,7 @@
 				F06345BF2FEB5DE95C4A96B0 /* NetworkMonitorService.swift in Sources */,
 				B5087423F235BBAB2B71B8AE /* NotificationService.swift in Sources */,
 				25DFBB28770E1BCB175C2224 /* OnboardingView.swift in Sources */,
+				D8B8A87D7A8A6E611435E8B0 /* SMBConnection.swift in Sources */,
 				2B9144783A2F3CDEB44F020D /* SMBMountManagerApp.swift in Sources */,
 				3EA4567265ADA477D0EF4F9E /* StatusMenuView.swift in Sources */,
 				A4829A57AE1BEF5229652447 /* UpdateAuthorizationView.swift in Sources */,
@@ -280,7 +332,23 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		6A61FC9907C252A0C5D9E1D5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A0D5271A344477A4BEE513EA /* SMBMountManagerTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		D3FDF04287579482E4E5933A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 57871BCAD6B1FF1172B869B4 /* SMBMountManager */;
+			targetProxy = 86BD4EC12C6A63D96B590259 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		2130968F5ACC5924DFA4E73F /* Debug */ = {
@@ -351,8 +419,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = SMBMountManager/Resources/SMBMountManager.entitlements;
+				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
+				DEVELOPMENT_TEAM = X9X6NCYV6F;
 				ENABLE_APP_SANDBOX = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SMBMountManager/Resources/Info.plist;
@@ -360,9 +430,10 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.7.1;
-				PRODUCT_BUNDLE_IDENTIFIER = org.imstevelin.SMBMountManager;
-				PRODUCT_NAME = "SMB掛載管理器";
+				MARKETING_VERSION = 1.7.2;
+				PRODUCT_BUNDLE_IDENTIFIER = org.imstevelin.SMBMountClientV3;
+				PRODUCT_MODULE_NAME = SMBMountManager;
+				PRODUCT_NAME = "SMB掛載客戶端";
 				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 			};
@@ -373,8 +444,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = SMBMountManager/Resources/SMBMountManager.entitlements;
+				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
+				DEVELOPMENT_TEAM = X9X6NCYV6F;
 				ENABLE_APP_SANDBOX = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SMBMountManager/Resources/Info.plist;
@@ -382,13 +455,30 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.7.1;
-				PRODUCT_BUNDLE_IDENTIFIER = org.imstevelin.SMBMountManager;
-				PRODUCT_NAME = "SMB掛載管理器";
+				MARKETING_VERSION = 1.7.2;
+				PRODUCT_BUNDLE_IDENTIFIER = org.imstevelin.SMBMountClientV3;
+				PRODUCT_MODULE_NAME = SMBMountManager;
+				PRODUCT_NAME = "SMB掛載客戶端";
 				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 			};
 			name = Debug;
+		};
+		7FAAA362136F01FD70E0F4B0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.imstevelin.SMBMountClientV3Tests;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SMB掛載客戶端.app/Contents/MacOS/SMB掛載客戶端";
+			};
+			name = Release;
 		};
 		83B7A142F98F5B744F9CBCFF /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -446,6 +536,22 @@
 			};
 			name = Release;
 		};
+		C5BB557AD536AA2D16A59305 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.imstevelin.SMBMountClientV3Tests;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SMB掛載客戶端.app/Contents/MacOS/SMB掛載客戶端";
+			};
+			name = Debug;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -454,6 +560,15 @@
 			buildConfigurations = (
 				2130968F5ACC5924DFA4E73F /* Debug */,
 				83B7A142F98F5B744F9CBCFF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		B191D6FA8AB81A71E80382CB /* Build configuration list for PBXNativeTarget "SMBMountManagerTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C5BB557AD536AA2D16A59305 /* Debug */,
+				7FAAA362136F01FD70E0F4B0 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

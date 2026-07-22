@@ -323,8 +323,11 @@ struct UploadTaskRow: View {
                         Button {
                             // Can't easily open remote Finder unless we reconstruct the fileURL path
                             guard let mount = AppLifecycle.shared.mountManager?.mounts.first(where: { $0.id == task.mountId }) else { return }
-                            let url = URL(fileURLWithPath: mount.mountPath).appendingPathComponent(task.relativeSMBPath).deletingLastPathComponent()
-                            NSWorkspace.shared.open(url)
+                            guard let fileURL = SMBConnection.childURL(
+                                rootPath: mount.mountPath,
+                                relativePath: task.relativeSMBPath
+                            ) else { return }
+                            NSWorkspace.shared.open(fileURL.deletingLastPathComponent())
                         } label: {
                             Image(systemName: "folder.fill")
                                 .font(.title3)

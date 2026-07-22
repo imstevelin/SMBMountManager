@@ -4,6 +4,7 @@ import UserNotifications
 /// Manages native macOS notifications via UserNotifications framework.
 /// Supports event coalescing (batching same-cycle mount events), transfer notifications,
 /// and randomized humorous templates for a delightful user experience.
+@MainActor
 struct NotificationService {
     static let categoryReconnect = "MOUNT_RECONNECT"
     static let actionReconnect = "RECONNECT_ACTION"

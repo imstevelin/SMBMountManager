@@ -15,7 +15,6 @@ struct AddMountSheet: View {
     @State private var shareMatchesName = true
     @State private var username = ""
     @State private var password = ""
-    @State private var useKeychain = true
     @State private var showInSidebar = true
     @State private var createDesktopShortcut = false
     @State private var testingServer = false
@@ -73,7 +72,6 @@ struct AddMountSheet: View {
                 if let pass = KeychainService.getPassword(forMount: edit.name, username: edit.username) {
                     password = pass
                 }
-                useKeychain = edit.useKeychain
                 showInSidebar = edit.showInSidebar
                 createDesktopShortcut = edit.createDesktopShortcut
                 allowedSSIDs = edit.allowedSSIDs
@@ -169,7 +167,7 @@ struct AddMountSheet: View {
                         FormField(title: "掛載點名稱", hint: "僅限英數、底線、連字號") {
                             TextField("例如: nas_share", text: $name)
                                 .textFieldStyle(.roundedBorder)
-                                .onChange(of: name) { newValue in
+                                .onChange(of: name) { _, newValue in
                                     validateName(newValue)
                                     if shareMatchesName { shareName = newValue }
                                 }
@@ -189,7 +187,7 @@ struct AddMountSheet: View {
                         }
 
                         Toggle("SMB 共享名稱與掛載名稱相同", isOn: $shareMatchesName)
-                            .onChange(of: shareMatchesName) { matched in
+                            .onChange(of: shareMatchesName) { _, matched in
                                 if matched { shareName = name }
                             }
 
@@ -215,11 +213,14 @@ struct AddMountSheet: View {
                                 .textFieldStyle(.roundedBorder)
                         }
 
-                        Picker("密碼儲存方式", selection: $useKeychain) {
-                            Label("Keychain (最安全)", systemImage: "lock.shield").tag(true)
-                            Label("明文儲存 (不建議)", systemImage: "exclamationmark.triangle").tag(false)
+                        Label {
+                            Text("密碼只會安全儲存在 macOS Keychain，不會寫入設定檔。")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } icon: {
+                            Image(systemName: "lock.shield")
+                                .foregroundStyle(.green)
                         }
-                        .pickerStyle(.radioGroup)
                     }
                 }
 
@@ -228,7 +229,7 @@ struct AddMountSheet: View {
                     VStack(alignment: .leading, spacing: 10) {
                         Toggle("顯示在 Finder 側邊欄「位置」與桌面上", isOn: $showInSidebar)
                             .help("關閉此選項會自動加入 nobrowse 掛載參數，隱藏該掛載點。")
-                            .onChange(of: showInSidebar) { newValue in
+                            .onChange(of: showInSidebar) { _, newValue in
                                 if !newValue { optNobrowse = true }
                                 else { optNobrowse = false }
                             }
@@ -325,7 +326,7 @@ struct AddMountSheet: View {
                 formSection(icon: "slider.horizontal.3", title: "進階掛載選項 (可略過)") {
                     VStack(alignment: .leading, spacing: 10) {
                         Toggle("nobrowse — 不在桌面或側邊欄顯示", isOn: $optNobrowse)
-                            .onChange(of: optNobrowse) { newValue in
+                            .onChange(of: optNobrowse) { _, newValue in
                                 if newValue { showInSidebar = false }
                                 else { showInSidebar = true }
                             }
@@ -440,7 +441,7 @@ struct AddMountSheet: View {
                             configGridRow("伺服器", parsedServers.joined(separator: ", "))
                             configGridRow("共享名稱", shareName)
                             configGridRow("帳號", username)
-                            configGridRow("密碼儲存", useKeychain ? "Keychain" : "明文")
+                            configGridRow("密碼儲存", "macOS Keychain")
                             configGridRow("顯示在側邊欄", showInSidebar ? "是" : "否")
                             configGridRow("建立桌面捷徑", createDesktopShortcut ? "是" : "否")
                         }
@@ -552,8 +553,7 @@ struct AddMountSheet: View {
 
     private func validateName(_ value: String) {
         if value.isEmpty { nameError = ""; return }
-        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_-"))
-        if !value.unicodeScalars.allSatisfy({ allowed.contains($0) }) {
+        if !MountPoint.isValidName(value) {
             nameError = "只能包含英數、底線和連字號"
         } else if value != editingMount?.name && mountManager.mounts.contains(where: { $0.name == value }) {
             nameError = "此名稱已被使用"
@@ -572,9 +572,10 @@ struct AddMountSheet: View {
         let share = shareName
         let user = username
         let pass = password
+        let manager = mountManager
 
         Task.detached {
-            let result = mountManager.preValidateMount(
+            let result = manager.preValidateMount(
                 servers: servers,
                 shareName: share,
                 username: user,
@@ -597,26 +598,35 @@ struct AddMountSheet: View {
             options.append(contentsOf: customOptions.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) })
         }
 
-        if let oldName = editingMount?.name {
-            if oldName != name && mountManager.mounts.contains(where: { $0.name == name }) {
-                onComplete(false, "掛載點 '\(name)' 的設定已存在。")
-                return
-            }
-            let _ = mountManager.deleteMount(name: oldName)
+        let result: (success: Bool, error: String?)
+        if let originalName = editingMount?.name {
+            result = mountManager.updateMount(
+                originalName: originalName,
+                name: name,
+                servers: parsedServers,
+                shareName: shareName,
+                username: username,
+                password: password,
+                useKeychain: true,
+                mountOptions: options.joined(separator: ","),
+                showInSidebar: showInSidebar,
+                createDesktopShortcut: showInSidebar ? createDesktopShortcut : false,
+                allowedSSIDs: allowedSSIDs
+            )
+        } else {
+            result = mountManager.createMount(
+                name: name,
+                servers: parsedServers,
+                shareName: shareName,
+                username: username,
+                password: password,
+                useKeychain: true,
+                mountOptions: options.joined(separator: ","),
+                showInSidebar: showInSidebar,
+                createDesktopShortcut: showInSidebar ? createDesktopShortcut : false,
+                allowedSSIDs: allowedSSIDs
+            )
         }
-
-        let result = mountManager.createMount(
-            name: name,
-            servers: parsedServers,
-            shareName: shareName,
-            username: username,
-            password: password,
-            useKeychain: useKeychain,
-            mountOptions: options.joined(separator: ","),
-            showInSidebar: showInSidebar,
-            createDesktopShortcut: showInSidebar ? createDesktopShortcut : false,
-            allowedSSIDs: allowedSSIDs
-        )
 
         if result.success {
             let msg = editingMount == nil ? "已成功建立並啟用掛載點 '\(name)'！\n系統將在背景自動進行掛載。" : "掛載點 '\(name)' 設定已更新！\n系統將重新進行連線。"

@@ -1,9 +1,9 @@
 import Foundation
 
-class ChunkDownloader {
+final class ChunkDownloader: @unchecked Sendable {
     private var task: DownloadTaskModel
-    private let onProgress: (DownloadTaskModel) -> Void
-    private var isPaused = false
+    private let onProgress: @Sendable (DownloadTaskModel) -> Void
+    private var _isPaused = false
     private let chunkSize: UInt64 = 10 * 1024 * 1024 // 10MB per chunk
     private let maxConcurrentConnections = 4
     
@@ -11,14 +11,16 @@ class ChunkDownloader {
     private let taskLock = NSLock()
     private var lastProgressUpdateTime: Date = Date()
     
-    init(task: DownloadTaskModel, onProgress: @escaping (DownloadTaskModel) -> Void) {
+    init(task: DownloadTaskModel, onProgress: @escaping @Sendable (DownloadTaskModel) -> Void) {
         self.task = task
         self.onProgress = onProgress
     }
     
-    func pause() async {
-        isPaused = true
+    func pause() {
+        taskLock.withLock { _isPaused = true }
     }
+
+    private var isPaused: Bool { taskLock.withLock { _isPaused } }
     
     func start() async {
         guard !isPaused else { return }
@@ -32,7 +34,13 @@ class ChunkDownloader {
         }
         
         // Use local mount path since it's already mounted by the OS
-        let sourceURL = URL(fileURLWithPath: mount.mountPath).appendingPathComponent(task.relativeSMBPath)
+        guard let sourceURL = SMBConnection.childURL(
+            rootPath: mount.mountPath,
+            relativePath: task.relativeSMBPath
+        ) else {
+            fail(with: "來源路徑超出掛載點範圍")
+            return
+        }
         
         if task.chunks.isEmpty {
             do {
@@ -64,11 +72,11 @@ class ChunkDownloader {
                     offset += expected
                     chunkId += 1
                 }
-                taskLock.lock()
-                task.chunks = chunks
-                task.state = .downloading
-                let updatedTask = task
-                taskLock.unlock()
+                let updatedTask = taskLock.withLock {
+                    task.chunks = chunks
+                    task.state = .downloading
+                    return task
+                }
                 
                 onProgress(updatedTask)
                 
@@ -86,10 +94,10 @@ class ChunkDownloader {
                 return
             }
         } else {
-            taskLock.lock()
-            task.state = .downloading
-            let updatedTask = task
-            taskLock.unlock()
+            let updatedTask = taskLock.withLock {
+                task.state = .downloading
+                return task
+            }
             
             onProgress(updatedTask)
         }
@@ -146,7 +154,7 @@ class ChunkDownloader {
     /// This is critical for SMB: each read handle opens a separate smbfs session,
     /// enabling true parallel throughput instead of serializing on a single socket.
     private func downloadChunk(at index: Int, sourceURL: URL) async throws {
-        let chunk = task.chunks[index]
+        let chunk = taskLock.withLock { task.chunks[index] }
         if chunk.isCompleted { return }
         
         // Each concurrent task gets its own read handle (separate smbfs session)
@@ -154,12 +162,13 @@ class ChunkDownloader {
         defer { try? readHandle.close() }
         
         // Each concurrent task gets its own write handle
-        let writeHandle = try FileHandle(forWritingTo: task.destinationURL)
+        let destinationURL = taskLock.withLock { task.destinationURL }
+        let writeHandle = try FileHandle(forWritingTo: destinationURL)
         defer { try? writeHandle.close() }
         
         // Bypass kernel buffer cache to get real-time progress instead of cached bursts
-        fcntl(readHandle.fileDescriptor, F_NOCACHE, 1)
-        fcntl(writeHandle.fileDescriptor, F_NOCACHE, 1)
+        _ = fcntl(readHandle.fileDescriptor, F_NOCACHE, 1)
+        _ = fcntl(writeHandle.fileDescriptor, F_NOCACHE, 1)
         
         var currentOffset = chunk.startOffset + chunk.downloadedBytes
         let endOffset = chunk.startOffset + chunk.expectedSize
@@ -169,13 +178,17 @@ class ChunkDownloader {
             let readSize = Int(min(bufferSize, endOffset - currentOffset))
             
             try readHandle.seek(toOffset: currentOffset)
-            guard let data = try readHandle.read(upToCount: readSize), !data.isEmpty else { break }
+            guard let data = try readHandle.read(upToCount: readSize), !data.isEmpty else {
+                throw CocoaError(.fileReadUnknown, userInfo: [
+                    NSLocalizedDescriptionKey: "來源檔案在預期位置前提前結束"
+                ])
+            }
             
             // Write to the correct offset in the destination file (thread-safe via fileLock)
-            fileLock.lock()
-            try writeHandle.seek(toOffset: currentOffset)
-            try writeHandle.write(contentsOf: data)
-            fileLock.unlock()
+            try fileLock.withLock {
+                try writeHandle.seek(toOffset: currentOffset)
+                try writeHandle.write(contentsOf: data)
+            }
             
             currentOffset += UInt64(data.count)
             let downloaded = currentOffset - chunk.startOffset
@@ -187,15 +200,14 @@ class ChunkDownloader {
             
             // Update progress at most ~10 times per second to avoid UI thrashing
             let now = Date()
-            taskLock.lock()
-            self.task.chunks[index].downloadedBytes = downloaded
-            
-            let shouldUpdate = now.timeIntervalSince(self.lastProgressUpdateTime) > 0.50 || currentOffset >= endOffset
-            if shouldUpdate {
-                self.lastProgressUpdateTime = now
+            let (updatedTask, shouldUpdate) = taskLock.withLock {
+                self.task.chunks[index].downloadedBytes = downloaded
+                let shouldUpdate = now.timeIntervalSince(self.lastProgressUpdateTime) > 0.50 || currentOffset >= endOffset
+                if shouldUpdate {
+                    self.lastProgressUpdateTime = now
+                }
+                return (self.task, shouldUpdate)
             }
-            let updatedTask = self.task
-            taskLock.unlock()
             
             if shouldUpdate {
                 self.onProgress(updatedTask)
@@ -207,20 +219,20 @@ class ChunkDownloader {
     }
     
     private func fail(with message: String) {
-        taskLock.lock()
-        task.state = .error
-        task.errorMessage = message
-        let updatedTask = task
-        taskLock.unlock()
+        let updatedTask = taskLock.withLock {
+            task.state = .error
+            task.errorMessage = message
+            return task
+        }
         
         self.onProgress(updatedTask)
     }
     
     private func completeTask() {
-        taskLock.lock()
-        task.state = .completed
-        let updatedTask = task
-        taskLock.unlock()
+        let updatedTask = taskLock.withLock {
+            task.state = .completed
+            return task
+        }
         
         self.onProgress(updatedTask)
     }

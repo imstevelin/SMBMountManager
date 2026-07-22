@@ -8,7 +8,7 @@ class UploadManager: ObservableObject {
     @Published var tasks: [UploadTaskModel] = []
     
     private let storageURL: URL
-    private let queue = DispatchQueue(label: "org.imstevelin.UploadManager", attributes: .concurrent)
+    private let queue = DispatchQueue(label: "org.imstevelin.SMBMountClientV3.upload", attributes: .concurrent)
     
     // Limits concurrent SMB writes to 1 to prevent NAS storage locks and connection unresponsiveness
     private let maxConcurrentTasks = 1
@@ -34,9 +34,14 @@ class UploadManager: ObservableObject {
     
     private init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let managerDir = appSupport.appendingPathComponent("SMBMountManager/Uploads")
+        let managerDir = appSupport.appendingPathComponent("SMBMountClientV3/Uploads")
         try? FileManager.default.createDirectory(at: managerDir, withIntermediateDirectories: true)
         self.storageURL = managerDir.appendingPathComponent("tasks.json")
+        let legacyURL = appSupport.appendingPathComponent("SMBMountManager/Uploads/tasks.json")
+        if !FileManager.default.fileExists(atPath: storageURL.path),
+           FileManager.default.fileExists(atPath: legacyURL.path) {
+            try? FileManager.default.copyItem(at: legacyURL, to: storageURL)
+        }
         
         loadTasks()
         startSpeedMeasurement()
@@ -57,9 +62,7 @@ class UploadManager: ObservableObject {
         }
         
         let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
-            // Use DispatchQueue.main.async instead of Task { @MainActor } to avoid
-            // event loop starvation when the window is inactive.
-            DispatchQueue.main.async {
+            Task { @MainActor [weak self] in
                 guard let self = self else { return }
                 
                 var totalGlobalSpeed: Int64 = 0
@@ -129,10 +132,14 @@ class UploadManager: ObservableObject {
                     self.taskETASpeeds.removeValue(forKey: id)
                 }
                 
+                let hadActiveTasks = self.currentSpeedBytesPerSecond > 0 || !activeTaskIds.isEmpty
                 self.currentSpeedBytesPerSecond = totalGlobalSpeed
                 
                 // Coalesce all the dictionary changes above into a single objectWillChange
-                self.objectWillChange.send()
+                // OPTIMIZATION: Only notify if there are active tasks or speed just dropped to 0 to prevent 100% idle CPU
+                if !activeTaskIds.isEmpty || hadActiveTasks {
+                    self.objectWillChange.send()
+                }
             }
         }
         RunLoop.main.add(timer, forMode: .common)
@@ -206,12 +213,13 @@ class UploadManager: ObservableObject {
                 }
             }
             
+            let finalNewTasks = newTasks
             await MainActor.run {
-                if !newTasks.isEmpty {
-                    self.tasks.append(contentsOf: newTasks)
+                if !finalNewTasks.isEmpty {
+                    self.tasks.append(contentsOf: finalNewTasks)
                     self.saveTasks()
                     
-                    for _ in newTasks {
+                    for _ in finalNewTasks {
                         self.processNextTasks()
                     }
                 }
@@ -224,9 +232,7 @@ class UploadManager: ObservableObject {
             self.tasks[index].state = .paused
             
             if let uploader = uploaders[id] {
-                Task {
-                    await uploader.pause()
-                }
+                uploader.pause()
             }
             saveTasks()
             processNextTasks()
@@ -244,19 +250,11 @@ class UploadManager: ObservableObject {
         }
         self.saveTasks()
         
-        Task {
-            await withTaskGroup(of: Void.self) { group in
-                for id in taskIdsToPause {
-                    if let uploader = self.uploaders[id] {
-                        group.addTask { await uploader.pause() }
-                    }
-                }
-            }
-            await MainActor.run {
-                self.isPausingAll = false
-                self.processNextTasks()
-            }
+        for id in taskIdsToPause {
+            uploaders[id]?.pause()
         }
+        isPausingAll = false
+        processNextTasks()
     }
     
     func resumeTask(id: UUID) {
@@ -312,8 +310,8 @@ class UploadManager: ObservableObject {
             let task = tasks[idx]
             
             // Note: User requested to explicitly delete `.smbupload` when a task is cancelled.
-            if let mount = AppLifecycle.shared.mountManager?.mounts.first(where: { $0.id == task.mountId }) {
-                let destURL = URL(fileURLWithPath: mount.mountPath).appendingPathComponent(task.relativeSMBPath)
+            if let mount = AppLifecycle.shared.mountManager?.mounts.first(where: { $0.id == task.mountId }),
+               let destURL = SMBConnection.childURL(rootPath: mount.mountPath, relativePath: task.relativeSMBPath) {
                 let uploadURL = destURL.appendingPathExtension("smbupload")
                 try? FileManager.default.removeItem(at: uploadURL)
             }
@@ -327,29 +325,22 @@ class UploadManager: ObservableObject {
     func deleteAllActive() {
         let activeTaskIds = tasks.filter { $0.state == .uploading || $0.state == .waiting || $0.state == .paused || $0.state == .error }.map { $0.id }
         
-        Task.detached {
-            try? await withThrowingTaskGroup(of: Void.self) { group in
-                for taskId in activeTaskIds {
-                    if let uploader = await self.uploaders[taskId] {
-                        group.addTask { await uploader.pause() }
-                    }
-                }
-                while try await group.next() != nil { }
-            }
-            
-            await MainActor.run {
-                for task in self.tasks where activeTaskIds.contains(task.id) {
-                    if let mount = AppLifecycle.shared.mountManager?.mounts.first(where: { $0.id == task.mountId }) {
-                        let destURL = URL(fileURLWithPath: mount.mountPath).appendingPathComponent(task.relativeSMBPath)
-                        let uploadURL = destURL.appendingPathExtension("smbupload")
-                        try? FileManager.default.removeItem(at: uploadURL)
-                    }
-                }
-                self.tasks.removeAll { activeTaskIds.contains($0.id) }
-                self.saveTasks()
-                self.processNextTasks()
+        for taskId in activeTaskIds {
+            uploaders[taskId]?.pause()
+        }
+        for task in tasks where activeTaskIds.contains(task.id) {
+            if let mount = AppLifecycle.shared.mountManager?.mounts.first(where: { $0.id == task.mountId }),
+               let destURL = SMBConnection.childURL(rootPath: mount.mountPath, relativePath: task.relativeSMBPath) {
+                let uploadURL = destURL.appendingPathExtension("smbupload")
+                try? FileManager.default.removeItem(at: uploadURL)
             }
         }
+        for taskId in activeTaskIds {
+            uploaders.removeValue(forKey: taskId)
+        }
+        tasks.removeAll { activeTaskIds.contains($0.id) }
+        saveTasks()
+        processNextTasks()
     }
     
     // Called when sleep is imminent
@@ -362,9 +353,7 @@ class UploadManager: ObservableObject {
         saveTasks()
         
         for (_, uploader) in uploaders {
-            Task {
-                await uploader.pause()
-            }
+            uploader.pause()
         }
     }
     
@@ -407,7 +396,7 @@ class UploadManager: ObservableObject {
         // CRITICAL: Must pass tasks[index] which has the .uploading state,
         // not the stale 'task' parameter which still has .waiting state!
         let uploader = ChunkUploader(task: tasks[index]) { [weak self] updatedTask in
-            DispatchQueue.main.async {
+            Task { @MainActor [weak self] in
                 self?.updateTask(updatedTask)
             }
         }

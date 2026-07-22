@@ -1,9 +1,9 @@
 import Foundation
 
-class ChunkUploader {
+final class ChunkUploader: @unchecked Sendable {
     private var task: UploadTaskModel
-    private let onProgress: (UploadTaskModel) -> Void
-    private var isPaused = false
+    private let onProgress: @Sendable (UploadTaskModel) -> Void
+    private var _isPaused = false
     
     // Chunk size: 4MB per chunk for optimal SMB transfer balance, allowing the kernel to interleave other commands
     private let chunkSize: UInt64 = 4 * 1024 * 1024
@@ -11,14 +11,16 @@ class ChunkUploader {
     private let taskLock = NSLock()
     private var lastProgressUpdateTime: Date = Date()
     
-    init(task: UploadTaskModel, onProgress: @escaping (UploadTaskModel) -> Void) {
+    init(task: UploadTaskModel, onProgress: @escaping @Sendable (UploadTaskModel) -> Void) {
         self.task = task
         self.onProgress = onProgress
     }
     
-    func pause() async {
-        isPaused = true
+    func pause() {
+        taskLock.withLock { _isPaused = true }
     }
+
+    private var isPaused: Bool { taskLock.withLock { _isPaused } }
     
     func start() async {
         guard !isPaused else { return }
@@ -34,7 +36,13 @@ class ChunkUploader {
         }
         
         // Final destination path on the mounted volume
-        let destURL = URL(fileURLWithPath: mount.mountPath).appendingPathComponent(task.relativeSMBPath)
+        guard let destURL = SMBConnection.childURL(
+            rootPath: mount.mountPath,
+            relativePath: task.relativeSMBPath
+        ) else {
+            fail(with: "目的路徑超出掛載點範圍")
+            return
+        }
         
         // Temporary upload path to protect incomplete files
         let uploadURL = destURL.appendingPathExtension("smbupload")
@@ -65,7 +73,13 @@ class ChunkUploader {
             if FileManager.default.fileExists(atPath: uploadURL.path) {
                 let remoteAttributes = try FileManager.default.attributesOfItem(atPath: uploadURL.path)
                 remoteFileSize = remoteAttributes[.size] as? UInt64 ?? 0
-                
+
+                if remoteFileSize > totalSize {
+                    try FileManager.default.removeItem(at: uploadURL)
+                    FileManager.default.createFile(atPath: uploadURL.path, contents: nil)
+                    remoteFileSize = 0
+                }
+
                 // Rollback 1MB (or up to 0) to prevent EOF packet drops leading to corrupted boundary
                 let rollbackAmount: UInt64 = 1 * 1024 * 1024
                 if remoteFileSize > rollbackAmount {
@@ -98,15 +112,15 @@ class ChunkUploader {
                 }
             }
             
-            taskLock.lock()
-            task.totalBytes = totalSize
-            task.uploadedBytes = remoteFileSize
-            task.lastModificationDate = localModificationDate
-            task.state = .uploading
-            let updatedTask = task
-            taskLock.unlock()
+            let updatedTask = taskLock.withLock {
+                task.totalBytes = totalSize
+                task.uploadedBytes = remoteFileSize
+                task.lastModificationDate = localModificationDate
+                task.state = .uploading
+                return task
+            }
             
-            DispatchQueue.main.async { self.onProgress(updatedTask) }
+            onProgress(updatedTask)
             
             // Start transfer
             try await performTransfer(localSourceURL: localSourceURL, uploadURL: uploadURL, finalDestURL: destURL, startOffset: remoteFileSize)
@@ -129,8 +143,8 @@ class ChunkUploader {
         // Prevent the Unified Buffer Cache (UBC) from filling up macOS RAM and kernel queues.
         // This forces synchronous IO straight to the SMB layer, applying natural backpressure
         // and preventing our tight loop from starving Finder's `stat` or `readdir` requests.
-        fcntl(readHandle.fileDescriptor, F_NOCACHE, 1)
-        fcntl(writeHandle.fileDescriptor, F_NOCACHE, 1)
+        _ = fcntl(readHandle.fileDescriptor, F_NOCACHE, 1)
+        _ = fcntl(writeHandle.fileDescriptor, F_NOCACHE, 1)
         
         var currentOffset = startOffset
         let totalSize = task.totalBytes
@@ -142,7 +156,11 @@ class ChunkUploader {
             let readSize = Int(min(chunkSize, totalSize - currentOffset))
             
             // Read from local
-            guard let data = try readHandle.read(upToCount: readSize), !data.isEmpty else { break }
+            guard let data = try readHandle.read(upToCount: readSize), !data.isEmpty else {
+                throw CocoaError(.fileReadUnknown, userInfo: [
+                    NSLocalizedDescriptionKey: "本機來源檔案在預期位置前提前結束"
+                ])
+            }
             
             // Write to SMB mount
             try writeHandle.write(contentsOf: data)
@@ -159,15 +177,14 @@ class ChunkUploader {
             currentOffset += UInt64(data.count)
             
             let now = Date()
-            taskLock.lock()
-            self.task.uploadedBytes = currentOffset
-            
-            let shouldUpdate = now.timeIntervalSince(self.lastProgressUpdateTime) > 0.50 || currentOffset >= totalSize
-            if shouldUpdate {
-                self.lastProgressUpdateTime = now
+            let (updatedTask, shouldUpdate) = taskLock.withLock {
+                self.task.uploadedBytes = currentOffset
+                let shouldUpdate = now.timeIntervalSince(self.lastProgressUpdateTime) > 0.50 || currentOffset >= totalSize
+                if shouldUpdate {
+                    self.lastProgressUpdateTime = now
+                }
+                return (self.task, shouldUpdate)
             }
-            let updatedTask = self.task
-            taskLock.unlock()
             
             if shouldUpdate {
                 self.onProgress(updatedTask)
@@ -183,29 +200,30 @@ class ChunkUploader {
         if currentOffset >= totalSize {
             // Rename from .smbupload to final name
             if FileManager.default.fileExists(atPath: finalDestURL.path) {
-                try? FileManager.default.removeItem(at: finalDestURL)
+                _ = try FileManager.default.replaceItemAt(finalDestURL, withItemAt: uploadURL)
+            } else {
+                try FileManager.default.moveItem(at: uploadURL, to: finalDestURL)
             }
-            try FileManager.default.moveItem(at: uploadURL, to: finalDestURL)
-            
+
             completeTask()
         }
     }
     
     private func fail(with message: String) {
-        taskLock.lock()
-        task.state = .error
-        task.errorMessage = message
-        let updatedTask = task
-        taskLock.unlock()
+        let updatedTask = taskLock.withLock {
+            task.state = .error
+            task.errorMessage = message
+            return task
+        }
         
         self.onProgress(updatedTask)
     }
     
     private func completeTask() {
-        taskLock.lock()
-        task.state = .completed
-        let updatedTask = task
-        taskLock.unlock()
+        let updatedTask = taskLock.withLock {
+            task.state = .completed
+            return task
+        }
         
         self.onProgress(updatedTask)
     }

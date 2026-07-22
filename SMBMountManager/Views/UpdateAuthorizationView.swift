@@ -12,6 +12,7 @@ struct UpdateAuthorizationView: View {
     var onComplete: () -> Void
 
     @State private var isProcessing = false
+    @State private var missingCredentialMessage: String?
 
     private var mountCount: Int { max(mountManager.mounts.count, 1) }
 
@@ -27,7 +28,7 @@ struct UpdateAuthorizationView: View {
                     .frame(width: 96, height: 96)
             }
 
-            Text("SMB 掛載管理器已更新 🎉")
+            Text("SMB 自動掛載工具已更新 🎉")
                 .font(.system(size: 22, weight: .bold))
                 .padding(.top, 16)
 
@@ -108,6 +109,21 @@ struct UpdateAuthorizationView: View {
             .glassEffect(.regular, in: .rect(cornerRadius: 10))
             .padding(.top, 14)
 
+            if let missingCredentialMessage {
+                Text(missingCredentialMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 10)
+
+                Button("前往設定重新輸入密碼") {
+                    appState.completeUpdateAuthorization()
+                    onComplete()
+                }
+                .buttonStyle(.bordered)
+                .padding(.top, 6)
+            }
+
             // Single action button
             Button(action: performFullVerification) {
                 HStack(spacing: 6) {
@@ -132,13 +148,26 @@ struct UpdateAuthorizationView: View {
 
     private func performFullVerification() {
         isProcessing = true
+        missingCredentialMessage = nil
         KeychainService.allowUI = true
 
         Task {
             // Step 1: Keychain — sequentially query every stored password.
             // If already authorized, returns instantly; otherwise triggers system password dialogs.
+            var missingMounts: [String] = []
             for mount in mountManager.mounts {
-                let _ = KeychainService.getPassword(forMount: mount.name, username: mount.username)
+                if KeychainService.getPassword(forMount: mount.name, username: mount.username) == nil {
+                    missingMounts.append(mount.name)
+                }
+            }
+
+            if !missingMounts.isEmpty {
+                await MainActor.run {
+                    KeychainService.allowUI = false
+                    isProcessing = false
+                    missingCredentialMessage = "找不到以下掛載點的密碼：\(missingMounts.joined(separator: "、"))"
+                }
+                return
             }
 
             // Step 2: Location Services — request permission (triggers system dialog if not yet determined).
@@ -151,9 +180,9 @@ struct UpdateAuthorizationView: View {
 
             // Step 3: Complete and proceed, bring app to front
             await MainActor.run {
+                KeychainService.allowUI = false
                 isProcessing = false
                 appState.completeUpdateAuthorization()
-                mountManager.startAll()
                 onComplete()
                 NSApp.activate(ignoringOtherApps: true)
             }

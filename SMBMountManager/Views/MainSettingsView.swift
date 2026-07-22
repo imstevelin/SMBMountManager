@@ -52,67 +52,95 @@ struct MainSettingsView: View {
     @State private var alertMessage = ""
     @State private var isFixerInstalled = LaunchdService.fixerInstalled
 
+    /// Tracks whether the settings window is actually visible on screen.
+    /// When false, the entire TabView hierarchy is torn down to stop all
+    /// Timer.publish, @ObservedObject re-evaluations, and animations —
+    /// preventing persistent CPU usage after closing the window.
+    @State private var isWindowVisible = true
+
     var body: some View {
-        TabView(selection: $selectedTab) {
-            // Tab 1: Mount Points
-            MountsTabView(mountManager: mountManager, showAddSheet: $showAddSheet, editingMount: $editingMount, isFixerInstalled: $isFixerInstalled)
-                .tabItem { Label("掛載點", systemImage: "externaldrive.connected.to.line.below") }
-                .tag(0)
+        Group {
+            if isWindowVisible {
+                TabView(selection: $selectedTab) {
+                    // Tab 1: Mount Points
+                    MountsTabView(mountManager: mountManager, showAddSheet: $showAddSheet, editingMount: $editingMount, isFixerInstalled: $isFixerInstalled)
+                        .tabItem { Label("掛載點", systemImage: "externaldrive.connected.to.line.below") }
+                        .tag(0)
 
-            // Tab 2: Downloads
-            DownloadManagerView()
-                .tabItem { Label("下載任務", systemImage: "arrow.down.circle") }
-                .tag(1)
-                
-            // Tab 3: Uploads
-            UploadManagerView()
-                .tabItem { Label("上傳任務", systemImage: "arrow.up.circle") }
-                .tag(2)
+                    // Tab 2: Downloads
+                    DownloadManagerView()
+                        .tabItem { Label("下載任務", systemImage: "arrow.down.circle") }
+                        .tag(1)
 
-            // Tab 4: Log Viewer
-            LogViewerTab(mountManager: mountManager)
-                .tabItem { Label("日誌", systemImage: "doc.text") }
-                .tag(3)
+                    // Tab 3: Uploads
+                    UploadManagerView()
+                        .tabItem { Label("上傳任務", systemImage: "arrow.up.circle") }
+                        .tag(2)
 
-            // Tab 5: Preferences
-            PreferencesTabView(mountManager: mountManager, isFixerInstalled: $isFixerInstalled)
-                .tabItem { Label("設定", systemImage: "gear") }
-                .tag(4)
-        }
-        .frame(minWidth: 760, minHeight: 540)
-        .sheet(isPresented: $showAddSheet) {
-            AddMountSheet(mountManager: mountManager, editingMount: editingMount) { success, message in
-                showAddSheet = false
-                editingMount = nil
-                if let msg = message {
-                    alertTitle = success ? "操作成功" : "發生錯誤"
-                    alertMessage = msg
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        NSApp.activate(ignoringOtherApps: true)
-                        showAlert = true
+                    // Tab 4: Log Viewer
+                    LogViewerTab(mountManager: mountManager)
+                        .tabItem { Label("日誌", systemImage: "doc.text") }
+                        .tag(3)
+
+                    // Tab 5: Preferences
+                    PreferencesTabView(mountManager: mountManager, isFixerInstalled: $isFixerInstalled)
+                        .tabItem { Label("設定", systemImage: "gear") }
+                        .tag(4)
+                }
+                .frame(minWidth: 760, minHeight: 540)
+                .sheet(isPresented: $showAddSheet) {
+                    AddMountSheet(mountManager: mountManager, editingMount: editingMount) { success, message in
+                        showAddSheet = false
+                        editingMount = nil
+                        if let msg = message {
+                            alertTitle = success ? "操作成功" : "發生錯誤"
+                            alertMessage = msg
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                NSApp.activate(ignoringOtherApps: true)
+                                showAlert = true
+                            }
+                        }
                     }
                 }
+                .onChange(of: showAddSheet) { _, isPresented in
+                    // Clear the editing mount state when dismissing the sheet via Cancel or swipe
+                    if !isPresented {
+                        editingMount = nil
+                    }
+                }
+                .sheet(isPresented: $showConnectionTest) {
+                    ConnectionTestView(mountManager: mountManager)
+                }
+                .alert(alertTitle, isPresented: $showAlert) {
+                    Button("確定") {
+                        DispatchQueue.main.async { NSApp.activate(ignoringOtherApps: true) }
+                    }
+                } message: {
+                    Text(alertMessage)
+                }
+                .onAppear {
+                    mountManager.refresh()
+                    isFixerInstalled = LaunchdService.fixerInstalled
+                }
+            } else {
+                // Lightweight placeholder when window is closed — no timers, no observers
+                Color.clear
             }
         }
-        .onChange(of: showAddSheet) { isPresented in
-            // Clear the editing mount state when dismissing the sheet via Cancel or swipe
-            if !isPresented {
-                editingMount = nil
+        // Listen for window close/show events to toggle the view hierarchy
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { notification in
+            if let window = notification.object as? NSWindow,
+               window.identifier?.rawValue == "settings" {
+                isWindowVisible = false
             }
         }
-        .sheet(isPresented: $showConnectionTest) {
-            ConnectionTestView(mountManager: mountManager)
-        }
-        .alert(alertTitle, isPresented: $showAlert) {
-            Button("確定") {
-                DispatchQueue.main.async { NSApp.activate(ignoringOtherApps: true) }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { notification in
+            if let window = notification.object as? NSWindow,
+               window.identifier?.rawValue == "settings" {
+                if !isWindowVisible {
+                    isWindowVisible = true
+                }
             }
-        } message: {
-            Text(alertMessage)
-        }
-        .onAppear {
-            mountManager.refresh()
-            isFixerInstalled = LaunchdService.fixerInstalled
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenDownloadsTab"))) { _ in
             selectedTab = 1
@@ -391,7 +419,7 @@ struct MountCard: View {
                         mountDetailRow("伺服器", mount.servers.joined(separator: ", "))
                         mountDetailRow("共享名稱", mount.shareName)
                         mountDetailRow("帳號", mount.username)
-                        mountDetailRow("密碼儲存", mount.useKeychain ? "🔒 Keychain" : "⚠️ 明文")
+                        mountDetailRow("密碼儲存", "🔒 macOS Keychain")
                         GridRow {
                             Text("網路限制")
                                 .font(.caption)
@@ -612,7 +640,7 @@ struct LogViewerTab: View {
                     }
                     .padding(10)
                 }
-                .onChange(of: logContent) { _ in
+                .onChange(of: logContent) {
                     if autoScroll {
                         let count = filteredLines.count
                         if count > 0 {
@@ -694,7 +722,7 @@ struct PreferencesTabView: View {
         Form {
             Section("一般") {
                 Toggle("開機時自動啟動", isOn: $settings.launchAtLogin)
-                Toggle("啟動時自動檢查並更新", isOn: $settings.autoCheckUpdates)
+                Toggle("啟動時自動檢查更新", isOn: $settings.autoCheckUpdates)
                 Toggle("在選單列顯示連線數量", isOn: $settings.showMountCount)
             }
 
@@ -783,7 +811,7 @@ struct PreferencesTabView: View {
                 DispatchQueue.main.async { NSApp.activate(ignoringOtherApps: true) }
             }
         } message: { Text(alertMessage) }
-        .onChange(of: showAlert) { newValue in
+        .onChange(of: showAlert) { _, newValue in
             if !newValue {
                 DispatchQueue.main.async {
                     NSApp.mainWindow?.makeKeyAndOrderFront(nil)
@@ -811,16 +839,15 @@ struct PreferencesTabView: View {
         let formatter = ISO8601DateFormatter()
         formatter.timeZone = TimeZone.current
         let dateStr = formatter.string(from: Date()).components(separatedBy: "T").first ?? ""
-        panel.nameFieldStringValue = "SMBMountManager_Profile_\(dateStr).json"
+        panel.nameFieldStringValue = "SMBMountClientV3_Profile_\(dateStr).json"
         
         NSApp.activate(ignoringOtherApps: true)
         let result = panel.runModal()
         if result == .OK, let url = panel.url {
             do {
-                if FileManager.default.fileExists(atPath: url.path) {
-                    try FileManager.default.removeItem(at: url)
-                }
-                try FileManager.default.moveItem(at: tmpURL, to: url)
+                let data = try Data(contentsOf: tmpURL)
+                try data.write(to: url, options: .atomic)
+                try? FileManager.default.removeItem(at: tmpURL)
                 NSWorkspace.shared.activateFileViewerSelecting([url])
             } catch {
                 let alert = NSAlert()

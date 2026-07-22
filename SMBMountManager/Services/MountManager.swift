@@ -1,5 +1,5 @@
 import Foundation
-import Combine
+@preconcurrency import Combine
 import AppKit
 import Network
 
@@ -16,6 +16,8 @@ class MountManager: ObservableObject {
     @Published var pausedMounts: Set<String> = []
     /// Tracks mounts paused automatically due to network restrictions
     @Published var networkPausedMounts: Set<String> = []
+    /// Cached menu bar icon name — updated whenever statuses change, avoids computed-property re-evaluation in SwiftUI body
+    @Published private(set) var overallStatusIcon: String = "externaldrive.badge.questionmark"
 
     /// Per-mount engines running in-process
     private var engines: [String: MountEngine] = [:]
@@ -35,6 +37,9 @@ class MountManager: ObservableObject {
 
     /// Auto-refresh timer for status updates (fix #3: faster updates)
     private var refreshTimer: Timer?
+    private var refreshTickCounter: Int = 0
+    private var isRefreshingStatuses = false
+    private var pendingDeepRefresh = false
     
     /// Subscription to network connectivity changes
     private var networkCancellable: AnyCancellable?
@@ -45,22 +50,21 @@ class MountManager: ObservableObject {
         startAutoRefresh()
     }
 
-    deinit {
-        refreshTimer?.invalidate()
-        monitorTimer?.invalidate()
-        networkCancellable?.cancel()
-    }
-
     private func startAutoRefresh() {
         refreshTimer?.invalidate()
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.refreshStatuses()
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.refreshTickCounter += 1
+                let isDeep = (self.refreshTickCounter % 5 == 1)
+                self.refreshStatuses(isDeepCheck: isDeep)
             }
         }
-        
-        // Listen for sudden total network drops and instantly detach
-        networkCancellable = AppLifecycle.shared.networkMonitor?.$isConnected
+    }
+
+    func bindNetworkMonitor(_ monitor: NetworkMonitorService) {
+        networkCancellable?.cancel()
+        networkCancellable = monitor.$isConnected
             .dropFirst() // Ignore initial value on boot
             .removeDuplicates()
             .receive(on: DispatchQueue.main)
@@ -98,7 +102,13 @@ class MountManager: ObservableObject {
         systemService.fixerInstalled = LaunchdService.fixerInstalled
     }
 
-    func refreshStatuses() {
+    func refreshStatuses(isDeepCheck: Bool = true) {
+        if isRefreshingStatuses {
+            pendingDeepRefresh = pendingDeepRefresh || isDeepCheck
+            return
+        }
+        isRefreshingStatuses = true
+
         // Run checks in a completely detached background thread so we NEVER block the main thread
         Task.detached { [weak self] in
             guard let self = self else { return }
@@ -108,11 +118,14 @@ class MountManager: ObservableObject {
             let oldStatuses = await MainActor.run { self.statuses }
             let currentIsPaused = await MainActor.run { self.isPaused }
             let currentPausedMounts = await MainActor.run { self.pausedMounts }
-            var currentNetworkPausedMounts = await MainActor.run { self.networkPausedMounts }
+            let currentNetworkPausedMounts = await MainActor.run { self.networkPausedMounts }
             
             let isNetworkUp = await MainActor.run { AppLifecycle.shared.networkMonitor?.isConnected ?? true }
             let enginesMap = await MainActor.run { self.engines }
             let currentNames = Set(currentMounts.map(\.name))
+
+            // Optimization: Get /sbin/mount output ONCE for all mounts instead of spawning a Process per mount
+            let mountsOutput = isNetworkUp ? MountManager.getMountsOutput() : ""
             
             await withTaskGroup(of: Void.self) { group in
                 for mount in currentMounts {
@@ -121,10 +134,10 @@ class MountManager: ObservableObject {
                     let isEngineRunning = engine != nil
                     let isUserPaused = currentIsPaused || currentPausedMounts.contains(mount.name)
                     let isNetPaused = currentNetworkPausedMounts.contains(mount.name)
-                    
+
                     group.addTask {
                         var status = oldStatus
-                        
+
                         if !isNetworkUp {
                             status.isMounted = false
                             status.isResponsive = false
@@ -135,68 +148,69 @@ class MountManager: ObservableObject {
                             status.isPaused = isUserPaused
                         } else {
                             status.isNetworkUp = true
-                            status.isMounted = MountManager.isMounted(mount.mountPath)
+                            status.isMounted = SMBConnection.isMounted(path: mount.mountPath, inMountOutput: mountsOutput)
+
                             if status.isMounted {
-                                status.isResponsive = await MountManager.isMountResponsive(mount.mountPath)
-                                
-                                // Only query file system attributes if the mount is proven responsive,
-                                // because `attributesOfFileSystem` can block indefinitely on a hung SMB share.
-                                if status.isResponsive {
-                                    // Use Process to get capacity via `df` to avoid FileManager hanging the UI task group indefinitely
-                                    let capacityData: (total: Int64, free: Int64)? = await {
-                                        let path = mount.mountPath
-                                        let task = Process()
-                                        task.launchPath = "/bin/df"
-                                        task.arguments = ["-k", path]
-                                        let pipe = Pipe()
-                                        task.standardOutput = pipe
-                                        task.standardError = FileHandle.nullDevice
-                                        
-                                        var didTimeout = false
-                                        do {
-                                            try task.run()
-                                            let deadline = Date().addingTimeInterval(2.0)
-                                            while task.isRunning && Date() < deadline {
-                                                try? await Task.sleep(nanoseconds: 100_000_000)
+                                if isDeepCheck {
+                                    status.isResponsive = await MountManager.isMountResponsive(mount.mountPath)
+
+                                    // Only query file system attributes if the mount is proven responsive,
+                                    // because `attributesOfFileSystem` can block indefinitely on a hung SMB share.
+                                    if status.isResponsive {
+                                        // Use Process to get capacity via `df` to avoid FileManager hanging the UI task group indefinitely
+                                        let capacityData: (total: Int64, free: Int64)? = await {
+                                            let path = mount.mountPath
+                                            let task = Process()
+                                            task.launchPath = "/bin/df"
+                                            task.arguments = ["-k", path]
+                                            let pipe = Pipe()
+                                            task.standardOutput = pipe
+                                            task.standardError = FileHandle.nullDevice
+
+                                            var didTimeout = false
+                                            do {
+                                                try task.run()
+                                                let deadline = Date().addingTimeInterval(2.0)
+                                                while task.isRunning && Date() < deadline {
+                                                    try? await Task.sleep(nanoseconds: 100_000_000)
+                                                }
+                                                if task.isRunning {
+                                                    task.terminate()
+                                                    didTimeout = true
+                                                }
+                                            } catch {
+                                                return nil
                                             }
-                                            if task.isRunning {
-                                                task.terminate()
-                                                didTimeout = true
-                                            }
-                                        } catch {
-                                            return nil
-                                        }
-                                        
-                                        if didTimeout { return nil }
-                                        
-                                        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                                        if let output = String(data: data, encoding: .utf8) {
-                                            let lines = output.components(separatedBy: .newlines)
-                                            if lines.count >= 2 {
-                                                let components = lines[1].components(separatedBy: .whitespaces).filter { !$0.isEmpty }
-                                                if components.count >= 4,
-                                                   let totalKB = Int64(components[1]),
-                                                   let freeKB = Int64(components[3]) {
-                                                    // df outputs in KB (1024 bytes) block sizes
-                                                    return (totalKB * 1024, freeKB * 1024)
+
+                                            if didTimeout { return nil }
+
+                                            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                                            if let output = String(data: data, encoding: .utf8) {
+                                                let lines = output.components(separatedBy: .newlines)
+                                                if lines.count >= 2 {
+                                                    let components = lines[1].components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+                                                    if components.count >= 4,
+                                                       let totalKB = Int64(components[1]),
+                                                       let freeKB = Int64(components[3]) {
+                                                        return (totalKB * 1024, freeKB * 1024)
+                                                    }
                                                 }
                                             }
-                                        }
-                                        return nil
-                                    }()
-                                    
-                                    if let cap = capacityData {
-                                        status.capacityTotal = cap.total
-                                        status.capacityAvailable = cap.free
+                                            return nil
+                                        }()
+
+                                        status.capacityTotal = capacityData?.total
+                                        status.capacityAvailable = capacityData?.free
                                     } else {
                                         status.capacityTotal = nil
                                         status.capacityAvailable = nil
-                                        status.isResponsive = false // Retroactively mark unresponsive if attributes hang
                                     }
-                                } else {
-                                    status.capacityTotal = nil
-                                    status.capacityAvailable = nil
                                 }
+                                // A shallow check deliberately keeps the previous responsiveness and capacity.
+                            } else {
+                                status.isResponsive = false
+                                status.capacityTotal = nil
+                                status.capacityAvailable = nil
                             }
                             status.isPaused = isUserPaused || isNetPaused
                         }
@@ -207,15 +221,20 @@ class MountManager: ObservableObject {
                             status.isFailing = false
                         }
 
-                        // Measure latency
-                        if isEngineRunning, let engine = engine {
-                            if let ms = engine.measureLatency() {
-                                status.latencyMs = ms
+                        // Measure latency — only during deep checks to avoid spawning ping/nc processes every 3 seconds
+                        if isDeepCheck {
+                            if isEngineRunning, let engine = engine {
+                                if let ms = engine.measureLatency() {
+                                    status.latencyMs = ms
+                                } else {
+                                    status.latencyMs = oldStatus.latencyMs
+                                }
                             } else {
-                                status.latencyMs = oldStatus.latencyMs
+                                status.latencyMs = nil
                             }
                         } else {
-                            status.latencyMs = nil
+                            // Shallow check: preserve previous latency value
+                            status.latencyMs = oldStatus.latencyMs
                         }
                         
                         let finalStatus = status
@@ -236,8 +255,11 @@ class MountManager: ObservableObject {
                                 }
                             }
                             
-                            // Progressive UI updates prevent one blocked API from freezing the UI for others
-                            self.statuses[name] = finalStatus
+                            // OPTIMIZATION: Only write to @Published statuses when value actually changed,
+                            // to prevent unnecessary SwiftUI re-evaluation when settings window is open
+                            if self.statuses[name] != finalStatus {
+                                self.statuses[name] = finalStatus
+                            }
                         }
                     }
                 }
@@ -260,8 +282,18 @@ class MountManager: ObservableObject {
                     }
                 }
                 
-                // Clear out deleted mounts from the status dictionary
-                self.statuses = self.statuses.filter { currentNames.contains($0.key) }
+                // Clear out deleted mounts from the status dictionary — only reassign if there are stale entries
+                let staleKeys = self.statuses.keys.filter { !currentNames.contains($0) }
+                if !staleKeys.isEmpty {
+                    for key in staleKeys { self.statuses.removeValue(forKey: key) }
+                }
+                self.updateOverallIcon()
+                self.isRefreshingStatuses = false
+
+                if self.pendingDeepRefresh {
+                    self.pendingDeepRefresh = false
+                    self.refreshStatuses(isDeepCheck: true)
+                }
             }
         }
     }
@@ -271,7 +303,6 @@ class MountManager: ObservableObject {
     /// Start all mount engines and the health monitor
     func startAll() {
         isPaused = false
-        pausedMounts.removeAll()
         networkPausedMounts.removeAll()
         for mount in mounts {
             startEngine(for: mount)
@@ -282,11 +313,12 @@ class MountManager: ObservableObject {
     /// Stop all engines and the health monitor (keeps mounts mounted)
     func stopAll() {
         stopMonitor()
-        for (name, engine) in engines {
+        let runningEngines = Array(engines.values)
+        engines.removeAll()
+        for engine in runningEngines {
             Task {
                 await engine.stop()
             }
-            engines.removeValue(forKey: name)
         }
     }
 
@@ -294,9 +326,10 @@ class MountManager: ObservableObject {
     func unmountAllAndStop() {
         stopMonitor()
         refreshTimer?.invalidate()
-        for (name, engine) in engines {
+        let runningEngines = Array(engines.values)
+        engines.removeAll()
+        for engine in runningEngines {
             Task { await engine.stop() }
-            engines.removeValue(forKey: name)
         }
         for mount in mounts {
             let path = mount.mountPath
@@ -308,42 +341,68 @@ class MountManager: ObservableObject {
         }
     }
 
-    /// FIX #1: Fully synchronous unmount for applicationWillTerminate (no MainActor needed)
+    /// Bounded synchronous cleanup used during logout, shutdown, or an explicit quit.
+    /// All unmounts run concurrently and share one five-second deadline so a dead
+    /// network volume cannot prevent the Mac from logging out.
     @MainActor
     func unmountAllAndStopSync() {
-        for mount in mounts {
-            let mountPath = mount.mountPath
-            // Run unmount completely blindly on exit — ensures no OS hangs or bugs
+        stopMonitor()
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+        networkCancellable?.cancel()
+
+        let runningEngines = Array(engines.values)
+        engines.removeAll()
+        for engine in runningEngines {
+            Task { await engine.stop() }
+        }
+
+        let mountedOutput = Self.getMountsOutput()
+        var processes: [Process] = []
+        for mount in mounts where SMBConnection.isMounted(path: mount.mountPath, inMountOutput: mountedOutput) {
             let task = Process()
-            task.launchPath = "/usr/sbin/diskutil"
-            task.arguments = ["unmount", "force", mountPath]
+            task.executableURL = URL(fileURLWithPath: "/usr/sbin/diskutil")
+            task.arguments = ["unmount", "force", mount.mountPath]
             task.standardOutput = FileHandle.nullDevice
             task.standardError = FileHandle.nullDevice
             do {
                 try task.run()
-                task.waitUntilExit()
-            } catch {}
+                processes.append(task)
+            } catch {
+                AppLogger.shared.warn("[MountManager] Could not start final unmount for \(mount.name): \(error.localizedDescription)")
+            }
+        }
+
+        let deadline = Date().addingTimeInterval(5)
+        while processes.contains(where: \.isRunning), Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        for task in processes where task.isRunning {
+            task.terminate()
         }
     }
 
     /// Asynchronously force-unmount all SMB shares without blocking the MainActor
     func unmountAllAsync() async {
-        // Collect paths on the MainActor
-        let paths = await MainActor.run { self.mounts.map { $0.mountPath } }
+        let mountedOutput = Self.getMountsOutput()
+        let paths = mounts
+            .map(\.mountPath)
+            .filter { SMBConnection.isMounted(path: $0, inMountOutput: mountedOutput) }
         
         // Spawn unmount processes concurrently off the main thread
         await withTaskGroup(of: Void.self) { group in
             for path in paths {
                 group.addTask {
-                    let task = Process()
-                    task.launchPath = "/usr/sbin/diskutil"
-                    task.arguments = ["unmount", "force", path]
-                    task.standardOutput = FileHandle.nullDevice
-                    task.standardError = FileHandle.nullDevice
-                    do {
-                        try task.run()
-                        task.waitUntilExit()
-                    } catch {}
+                    let firstSucceeded = await Self.runUnmountProcess(
+                        executable: "/sbin/umount",
+                        arguments: ["-f", path]
+                    )
+                    if !firstSucceeded {
+                        _ = await Self.runUnmountProcess(
+                            executable: "/usr/sbin/diskutil",
+                            arguments: ["unmount", "force", path]
+                        )
+                    }
                 }
             }
         }
@@ -391,13 +450,14 @@ class MountManager: ObservableObject {
             return
         }
 
-        // Stop existing engine if any
-        if let existing = engines[mount.name] {
-            Task { await existing.stop() }
-        }
+        let existing = engines[mount.name]
         let engine = MountEngine(mount: mount)
         engines[mount.name] = engine
-        Task { await engine.start() }
+        Task { [weak self] in
+            if let existing { await existing.stop() }
+            guard await MainActor.run(body: { self?.engines[mount.name] === engine }) else { return }
+            await engine.start()
+        }
     }
 
     /// Stop engine for a single mount
@@ -412,7 +472,6 @@ class MountManager: ObservableObject {
         guard let mount = mounts.first(where: { $0.name == name }) else { return false }
         pausedMounts.remove(name)
         networkPausedMounts.remove(name)
-        stopEngine(name: name)
         startEngine(for: mount)
         return true
     }
@@ -498,7 +557,7 @@ class MountManager: ObservableObject {
                             if await MountManager.isMountResponsive(mountPath) {
                                 await MainActor.run { self.consecutiveFailures[mount.name] = 0 }
                             } else {
-                                await MainActor.run {
+                                _ = await MainActor.run {
                                     let count = (self.consecutiveFailures[mount.name] ?? 0) + 1
                                     self.consecutiveFailures[mount.name] = count
 
@@ -557,18 +616,14 @@ class MountManager: ObservableObject {
                             
                             // If the network interface completely dropped, the active smb mount becomes a completely dead socket immediately. Force unmount it to prevent OS hang loops.
                             if physicallyMounted && !isNetworkUp {
-                                await MainActor.run {
-                                    Task.detached { [weak self] in
-                                        self?.forceUnmount(mount.mountPath)
-                                    }
-                                }
+                                self.forceUnmount(mount.mountPath)
                             }
                         } else {
                             // Not restricted
                             let isMounted = physicallyMounted
 
                             if netPaused.contains(mount.name) {
-                                await MainActor.run { self.networkPausedMounts.remove(mount.name) }
+                                _ = await MainActor.run { self.networkPausedMounts.remove(mount.name) }
                             }
                             
                             if isMounted {
@@ -607,12 +662,19 @@ class MountManager: ObservableObject {
 
     // MARK: - Overall Status (for menu bar icon)
 
-    var overallStatusIcon: String {
+    private func computeOverallStatusIcon() -> String {
         let allStatuses = Array(statuses.values)
         if allStatuses.isEmpty { return "externaldrive.badge.questionmark" }
         if allStatuses.allSatisfy({ $0.isMounted && $0.isResponsive }) { return "externaldrive.fill.badge.checkmark" }
         if allStatuses.allSatisfy({ !$0.isMounted }) { return "externaldrive.badge.xmark" }
         return "externaldrive.fill.badge.exclamationmark"
+    }
+
+    private func updateOverallIcon() {
+        let newIcon = computeOverallStatusIcon()
+        if overallStatusIcon != newIcon {
+            overallStatusIcon = newIcon
+        }
     }
 
     // MARK: - Pre-validate Mount (test before creating)
@@ -642,9 +704,15 @@ class MountManager: ObservableObject {
 
     nonisolated func preValidateMount(servers: [String], shareName: String, username: String, password: String) -> ValidationResult {
         var result = ValidationResult()
+        let normalizedServers = servers.compactMap(SMBConnection.normalizedHost)
+
+        guard !normalizedServers.isEmpty else {
+            result.errorDetail = "請至少輸入一個有效的伺服器名稱或 IP 位址。"
+            return result
+        }
 
         // 1. Find first reachable server (ICMP)
-        for server in servers {
+        for server in normalizedServers {
             if processRun(launchPath: "/sbin/ping", arguments: ["-c", "1", "-W", "1000", server]) {
                 result.serverReachable = true
                 result.reachableServer = server
@@ -653,8 +721,8 @@ class MountManager: ObservableObject {
         }
 
         // 2. Check SMB port (445)
-        var targetServer = servers.first ?? ""
-        for server in servers {
+        var targetServer = normalizedServers[0]
+        for server in normalizedServers {
             if processRun(launchPath: "/usr/bin/nc", arguments: ["-z", "-w", "3", server, "445"]) {
                 result.smbPortOpen = true
                 targetServer = server
@@ -672,7 +740,14 @@ class MountManager: ObservableObject {
         }
 
         // 3. Use smbutil to verify authentication
-        let smbViewURL = "//\(username):\(password)@\(targetServer)"
+        guard let smbViewURL = SMBConnection.serverViewSource(
+            username: username,
+            password: password,
+            server: targetServer
+        ) else {
+            result.errorDetail = "SMB 帳號或伺服器格式不正確。"
+            return result
+        }
         let (viewOutput, viewExitCode) = processOutputWithExitCode(
             launchPath: "/usr/bin/smbutil",
             arguments: ["view", smbViewURL]
@@ -718,38 +793,26 @@ class MountManager: ObservableObject {
     // MARK: - Create Mount
 
     func createMount(name: String, servers: [String], shareName: String, username: String, password: String, useKeychain: Bool, mountOptions: String, showInSidebar: Bool, createDesktopShortcut: Bool, allowedSSIDs: [String] = []) -> (success: Bool, error: String?) {
-        let nameRegex = try! NSRegularExpression(pattern: "^[a-zA-Z0-9_-]+$")
-        guard nameRegex.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)) != nil else {
-            return (false, "掛載名稱格式錯誤！只能包含英數、底線和連字號。")
-        }
-
         if mounts.contains(where: { $0.name == name }) {
             return (false, "掛載點 '\(name)' 的設定已存在。")
         }
 
-        let mount = MountPoint(
+        let built = buildMount(
             name: name,
             servers: servers,
             shareName: shareName,
             username: username,
-            useKeychain: useKeychain,
+            useKeychain: true,
             mountOptions: mountOptions,
             showInSidebar: showInSidebar,
             createDesktopShortcut: createDesktopShortcut,
             allowedSSIDs: allowedSSIDs
         )
+        guard let mount = built.mount else { return (false, built.error) }
 
         // Save password to Keychain
-        if useKeychain {
-            if let error = KeychainService.savePassword(forMount: name, username: username, password: password) {
-                return (false, "無法將密碼儲存到 Keychain：\(error)")
-            }
-        } else {
-            // Even for non-keychain, save to keychain for in-process retrieval
-            // (we can't embed plain text in the running process)
-            if let error = KeychainService.savePassword(forMount: name, username: username, password: password) {
-                return (false, "無法將密碼儲存到 Keychain：\(error)")
-            }
+        if let error = KeychainService.savePassword(forMount: name, username: username, password: password) {
+            return (false, "無法將密碼儲存到 Keychain：\(error)")
         }
 
         // Save config as JSON
@@ -766,11 +829,114 @@ class MountManager: ObservableObject {
         return (true, nil)
     }
 
+    /// Updates a profile without deleting the working configuration first.
+    /// The new credential and JSON are committed before the old engine/profile
+    /// is stopped, so a failed save cannot make an existing mount disappear.
+    func updateMount(
+        originalName: String,
+        name: String,
+        servers: [String],
+        shareName: String,
+        username: String,
+        password: String,
+        useKeychain: Bool,
+        mountOptions: String,
+        showInSidebar: Bool,
+        createDesktopShortcut: Bool,
+        allowedSSIDs: [String] = []
+    ) -> (success: Bool, error: String?) {
+        guard let oldMount = mounts.first(where: { $0.name == originalName }) else {
+            return (false, "找不到原始掛載點 '\(originalName)'。")
+        }
+        if name != originalName && mounts.contains(where: { $0.name == name }) {
+            return (false, "掛載點 '\(name)' 的設定已存在。")
+        }
+
+        let built = buildMount(
+            name: name,
+            servers: servers,
+            shareName: shareName,
+            username: username,
+            useKeychain: true,
+            mountOptions: mountOptions,
+            showInSidebar: showInSidebar,
+            createDesktopShortcut: createDesktopShortcut,
+            allowedSSIDs: allowedSSIDs
+        )
+        guard let newMount = built.mount else { return (false, built.error) }
+
+        if let error = KeychainService.savePassword(forMount: name, username: username, password: password) {
+            return (false, "無法將密碼儲存到 Keychain：\(error)")
+        }
+        do {
+            try newMount.save()
+        } catch {
+            return (false, "無法儲存掛載設定：\(error.localizedDescription)")
+        }
+
+        stopEngine(name: originalName)
+        if MountManager.isMounted(oldMount.mountPath) {
+            forceUnmount(oldMount.mountPath)
+        }
+        if originalName != name {
+            oldMount.remove()
+            KeychainService.deletePassword(forMount: originalName)
+            pausedMounts.remove(originalName)
+            networkPausedMounts.remove(originalName)
+        }
+
+        refresh()
+        startEngine(for: newMount)
+        return (true, nil)
+    }
+
+    private func buildMount(
+        name: String,
+        servers: [String],
+        shareName: String,
+        username: String,
+        useKeychain: Bool,
+        mountOptions: String,
+        showInSidebar: Bool,
+        createDesktopShortcut: Bool,
+        allowedSSIDs: [String]
+    ) -> (mount: MountPoint?, error: String?) {
+        guard MountPoint.isValidName(name) else {
+            return (nil, "掛載名稱格式錯誤！只能包含英數、底線和連字號。")
+        }
+        var seenServers = Set<String>()
+        let normalizedServers = servers
+            .compactMap(SMBConnection.normalizedHost)
+            .filter { seenServers.insert($0).inserted }
+        guard !normalizedServers.isEmpty else {
+            return (nil, "請至少輸入一個有效的伺服器名稱或 IP 位址。")
+        }
+        let trimmedShare = shareName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedShare.isEmpty, !trimmedShare.contains("/") else {
+            return (nil, "共享資料夾名稱不可為空或包含斜線。")
+        }
+        let trimmedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedUsername.isEmpty else { return (nil, "使用者名稱不可為空。") }
+
+        return (MountPoint(
+            name: name,
+            servers: normalizedServers,
+            shareName: trimmedShare,
+            username: trimmedUsername,
+            useKeychain: true,
+            mountOptions: mountOptions,
+            showInSidebar: showInSidebar,
+            createDesktopShortcut: createDesktopShortcut,
+            allowedSSIDs: allowedSSIDs
+        ), nil)
+    }
+
     // MARK: - Export / Import
 
     func exportMounts() -> URL? {
         guard let data = MountPoint.exportAll() else { return nil }
-        let tmpURL = FileManager.default.temporaryDirectory.appendingPathComponent("SMBMountManager_export.json")
+        let tmpURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SMBMountClientV3_export_\(UUID().uuidString).json")
         do {
             try data.write(to: tmpURL)
             return tmpURL
@@ -816,8 +982,18 @@ class MountManager: ObservableObject {
                         )
                         
                         if valResult.canProceed {
-                            let _ = KeychainService.savePassword(forMount: mount.name, username: mount.username, password: pass)
-                            passwordCorrect = true
+                            if let keychainError = KeychainService.savePassword(
+                                forMount: mount.name,
+                                username: mount.username,
+                                password: pass
+                            ) {
+                                let errorAlert = NSAlert()
+                                errorAlert.messageText = "無法儲存密碼"
+                                errorAlert.informativeText = keychainError
+                                errorAlert.runModal()
+                            } else {
+                                passwordCorrect = true
+                            }
                         } else {
                             let errorAlert = NSAlert()
                             errorAlert.messageText = "密碼驗證或連線失敗"
@@ -877,9 +1053,10 @@ class MountManager: ObservableObject {
         isPaused = true
         var count = 0
         // Stop all engines first to prevent auto-reconnect
-        for (name, engine) in engines {
+        let runningEngines = Array(engines.values)
+        engines.removeAll()
+        for engine in runningEngines {
             Task { await engine.stop() }
-            engines.removeValue(forKey: name)
         }
         // Then unmount
         for mount in mounts {
@@ -907,8 +1084,8 @@ class MountManager: ObservableObject {
 
     // MARK: - Mount Checking Utilities
 
-    /// FIX #3: Parse `/sbin/mount` so we don't trigger `FileManager` hangs on disconnected networks
-    nonisolated static func isMounted(_ path: String) -> Bool {
+    /// Returns the full output of /sbin/mount to check all mounts in one pass
+    nonisolated static func getMountsOutput() -> String {
         let task = Process()
         task.launchPath = "/sbin/mount"
         let pipe = Pipe()
@@ -917,12 +1094,17 @@ class MountManager: ObservableObject {
 
         do {
             try task.run()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
             task.waitUntilExit()
-            let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-            return output.contains(" on \(path) ")
+            return String(data: data, encoding: .utf8) ?? ""
         } catch {
-            return false
+            return ""
         }
+    }
+
+    /// FIX #3: Parse `/sbin/mount` so we don't trigger `FileManager` hangs on disconnected networks
+    nonisolated static func isMounted(_ path: String) -> Bool {
+        SMBConnection.isMounted(path: path, inMountOutput: getMountsOutput())
     }
 
     /// Run stat asynchronously without freezing the thread via `usleep`
@@ -951,66 +1133,88 @@ class MountManager: ObservableObject {
     @discardableResult
     nonisolated func forceUnmount(_ path: String) -> Bool {
         Task.detached {
-            let task = Process()
-            task.launchPath = "/bin/bash"
-            task.arguments = ["-c", "/sbin/umount -f \"\(path)\" || diskutil unmount force \"\(path)\" 2>/dev/null || rm -rf \"\(path)\" 2>/dev/null"]
-            task.standardOutput = FileHandle.nullDevice
-            task.standardError = FileHandle.nullDevice
-            
-            do { 
-                try task.run()
-                // Do not block indefinitely; give it 5 seconds to gracefully tear down the socket
-                let deadline = Date().addingTimeInterval(5)
-                while task.isRunning && Date() < deadline {
-                    try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s
-                }
-                if task.isRunning {
-                    task.terminate()
-                }
-            } catch { }
+            let firstSucceeded = await Self.runUnmountProcess(
+                executable: "/sbin/umount",
+                arguments: ["-f", path]
+            )
+            if !firstSucceeded {
+                _ = await Self.runUnmountProcess(
+                    executable: "/usr/sbin/diskutil",
+                    arguments: ["unmount", "force", path]
+                )
+            }
         }
         return true
+    }
+
+    nonisolated private static func runUnmountProcess(executable: String, arguments: [String]) async -> Bool {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: executable)
+        task.arguments = arguments
+        task.standardOutput = FileHandle.nullDevice
+        task.standardError = FileHandle.nullDevice
+        do { try task.run() } catch { return false }
+
+        let deadline = Date().addingTimeInterval(8)
+        while task.isRunning && Date() < deadline {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+        if task.isRunning {
+            task.terminate()
+            return false
+        }
+        return task.terminationStatus == 0
     }
 
     // MARK: - Log Reading
 
     func readLog(for name: String, lines: Int = 30) -> String {
-        let logPath: String
         if name == "monitor" {
-            logPath = "\(NSHomeDirectory())/Library/Logs/mount_monitor.log"
-        } else {
-            logPath = "\(NSHomeDirectory())/Library/Logs/mount_\(name).log"
+            return AppLogger.shared.readLogs()
+                .split(whereSeparator: \.isNewline)
+                .suffix(lines)
+                .joined(separator: "\n")
         }
-        return shellOutput("tail -\(lines) \"\(logPath)\" 2>/dev/null")
+        let marker = "[\(name)]"
+        return AppLogger.shared.readLogs()
+            .split(whereSeparator: \.isNewline)
+            .filter { $0.contains(marker) }
+            .suffix(lines)
+            .joined(separator: "\n")
     }
 
     // MARK: - Connection Test
 
     func testConnection(server: String) -> String {
-        var result = "伺服器連線測試: \(server)\n━━━━━━━━━━━━━━━━━━━━\n\n"
+        guard let host = SMBConnection.normalizedHost(server) else {
+            return "伺服器格式無效。"
+        }
+        var result = "伺服器連線測試: \(host)\n━━━━━━━━━━━━━━━━━━━━\n\n"
 
         result += "1️⃣ ICMP (Ping) 測試...\n"
-        if shellRun("/sbin/ping -c 3 -W 1000 \"\(server)\" >/dev/null 2>&1") {
+        if processRun(launchPath: "/sbin/ping", arguments: ["-c", "3", "-W", "1000", host]) {
             result += "   ✅ ICMP (Ping) 回應正常。\n\n"
         } else {
             result += "   ❌ ICMP (Ping) 無回應。\n   (可能被防火牆阻擋，不影響 SMB 連線)\n\n"
         }
 
         result += "2️⃣ SMB 連接埠 (445) 測試...\n"
-        if shellRun("nc -z -w 3 \"\(server)\" 445 >/dev/null 2>&1") {
+        if processRun(launchPath: "/usr/bin/nc", arguments: ["-z", "-w", "3", host, "445"]) {
             result += "   ✅ SMB 連接埠 (445) 開放。\n\n"
         } else {
             result += "   ❌ SMB 連接埠 (445) 無法連線。\n   (請檢查伺服器設定與防火牆)\n\n"
         }
 
-        let ipRegex = try! NSRegularExpression(pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$")
-        if ipRegex.firstMatch(in: server, range: NSRange(server.startIndex..., in: server)) == nil {
+        if IPv4Address(host) == nil && IPv6Address(host) == nil {
             result += "3️⃣ DNS 名稱解析測試...\n"
-            let hostOutput = shellOutput("host \"\(server)\" 2>/dev/null")
-            if !hostOutput.isEmpty && hostOutput.contains("has address") {
+            let (hostOutput, exitCode) = processOutputWithExitCode(
+                launchPath: "/usr/bin/dscacheutil",
+                arguments: ["-q", "host", "-a", "name", host]
+            )
+            if exitCode == 0, hostOutput.contains("ip_address:") {
                 result += "   ✅ DNS 解析成功。\n"
-                if let firstLine = hostOutput.components(separatedBy: "\n").first {
-                    result += "   \(firstLine.replacingOccurrences(of: "has address", with: "的 IP 位址為"))\n"
+                if let addressLine = hostOutput.components(separatedBy: "\n").first(where: { $0.contains("ip_address:") }) {
+                    result += "   \(addressLine.trimmingCharacters(in: .whitespaces))\n"
                 }
             } else {
                 result += "   ❌ DNS 解析失敗。\n   (請檢查您的網路設定或 DNS 伺服器)\n"
@@ -1018,30 +1222,6 @@ class MountManager: ObservableObject {
         }
 
         return result
-    }
-
-    // MARK: - Shell Helpers
-
-    private func shellRun(_ command: String) -> Bool {
-        let task = Process()
-        task.launchPath = "/bin/bash"
-        task.arguments = ["-c", command]
-        task.standardOutput = FileHandle.nullDevice
-        task.standardError = FileHandle.nullDevice
-        do { try task.run(); task.waitUntilExit(); return task.terminationStatus == 0 }
-        catch { return false }
-    }
-
-    private func shellOutput(_ command: String) -> String {
-        let task = Process()
-        task.launchPath = "/bin/bash"
-        task.arguments = ["-c", command]
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = FileHandle.nullDevice
-        do { try task.run(); task.waitUntilExit() }
-        catch { return "" }
-        return String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 
     // MARK: - Process Helpers (nonisolated)
@@ -1060,21 +1240,18 @@ class MountManager: ObservableObject {
         let task = Process()
         task.launchPath = launchPath
         task.arguments = arguments
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        task.standardOutput = stdoutPipe
-        task.standardError = stderrPipe
+        let outputPipe = Pipe()
+        task.standardOutput = outputPipe
+        task.standardError = outputPipe
         do {
             try task.run()
         } catch {
             return ("Process launch failed: \(error.localizedDescription)", -1)
         }
-        let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-        let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+        let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
         task.waitUntilExit()
-        let stdout = String(data: stdoutData, encoding: .utf8) ?? ""
-        let stderr = String(data: stderrData, encoding: .utf8) ?? ""
-        let combined = (stdout + stderr).trimmingCharacters(in: .whitespacesAndNewlines)
+        let combined = (String(data: outputData, encoding: .utf8) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         return (combined, task.terminationStatus)
     }
 }

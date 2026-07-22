@@ -1,6 +1,6 @@
 import Foundation
 
-enum DownloadState: String, Codable, Equatable {
+enum DownloadState: String, Codable, Equatable, Sendable {
     case waiting
     case downloading
     case paused
@@ -8,7 +8,7 @@ enum DownloadState: String, Codable, Equatable {
     case error
 }
 
-struct DownloadChunk: Codable, Identifiable, Equatable {
+struct DownloadChunk: Codable, Identifiable, Equatable, Sendable {
     var id: Int
     var startOffset: UInt64
     var expectedSize: UInt64
@@ -23,7 +23,7 @@ struct DownloadChunk: Codable, Identifiable, Equatable {
     }
 }
 
-struct DownloadTaskModel: Codable, Identifiable, Equatable {
+struct DownloadTaskModel: Codable, Identifiable, Equatable, Sendable {
     var id: UUID
     var fileName: String
     var mountId: String            // To fetch credentials and server info from MountManager

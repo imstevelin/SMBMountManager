@@ -9,20 +9,23 @@ class AppStateManager: ObservableObject {
     @Published var needsOnboarding: Bool = false { didSet { updateReadyState() } }
     @Published var needsUpdateAuthorization: Bool = false { didSet { updateReadyState() } }
     @Published var needsErrorAuthorization: Bool = false
-    
     @Published private(set) var isReadyToStartBackgroundEngines: Bool = false
     
     /// When upgrading from a pre-onboarding version, we need to show update auth FIRST,
     /// then show onboarding after the user completes update auth.
     private var needsOnboardingAfterUpdate: Bool = false
     
-    private let lastLaunchedVersionKey = "org.imstevelin.SMBMountManager.lastLaunchedVersion"
+    private let lastLaunchedVersionKey = "org.imstevelin.SMBMountClientV3.lastLaunchedVersion"
+    private let legacyLastLaunchedVersionKey = "org.imstevelin.SMBMountManager.lastLaunchedVersion"
     
     /// 1.5.0 is the first version that ships the interactive onboarding tutorial.
     private let firstOnboardingVersion = "1.5.0"
     
     private func updateReadyState() {
-        isReadyToStartBackgroundEngines = !needsOnboarding && !needsUpdateAuthorization
+        let newValue = !needsOnboarding && !needsUpdateAuthorization
+        if isReadyToStartBackgroundEngines != newValue {
+            isReadyToStartBackgroundEngines = newValue
+        }
     }
     
     private init() {
@@ -33,6 +36,8 @@ class AppStateManager: ObservableObject {
     private func checkAppVersion() {
         let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
         let lastVersion = UserDefaults.standard.string(forKey: lastLaunchedVersionKey)
+            ?? UserDefaults(suiteName: "org.imstevelin.SMBMountManager")?
+                .string(forKey: legacyLastLaunchedVersionKey)
         let hasExistingMounts = !MountPoint.loadAll().isEmpty
         
         if lastVersion == nil {

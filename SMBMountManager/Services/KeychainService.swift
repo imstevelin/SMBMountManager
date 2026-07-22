@@ -1,10 +1,16 @@
 import Foundation
 import Security
+import LocalAuthentication
 
 /// Manages SMB passwords in the macOS Keychain using Security.framework
 struct KeychainService {
     static let servicePre = "smb_mount"
-    static var allowUI: Bool = false
+    private static let interactionLock = NSLock()
+    nonisolated(unsafe) private static var interactionAllowed = false
+    static var allowUI: Bool {
+        get { interactionLock.withLock { interactionAllowed } }
+        set { interactionLock.withLock { interactionAllowed = newValue } }
+    }
 
     /// Save a password to the Keychain. Returns nil on success, or error message on failure.
     static func savePassword(forMount name: String, username: String, password: String) -> String? {
@@ -13,10 +19,12 @@ struct KeychainService {
             return "密碼編碼失敗"
         }
 
-        // Delete ALL existing entries for this service (any username)
-        deletePassword(forMount: name)
-
-        let query: [String: Any] = [
+        let itemQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: username
+        ]
+        let addQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: username,
@@ -24,20 +32,16 @@ struct KeychainService {
             kSecAttrLabel as String: "SMB Mount: \(name)",
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
         ]
-        var status = SecItemAdd(query as CFDictionary, nil)
 
-        // If it still exists somehow, update it instead
-        if status == errSecDuplicateItem {
-            let searchQuery: [String: Any] = [
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: service,
-                kSecAttrAccount as String: username
-            ]
-            let updateAttrs: [String: Any] = [
-                kSecValueData as String: passwordData,
-                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
-            ]
-            status = SecItemUpdate(searchQuery as CFDictionary, updateAttrs as CFDictionary)
+        // Update first so a failed write never destroys a working credential.
+        let updateAttributes: [String: Any] = [
+            kSecValueData as String: passwordData,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
+            kSecAttrLabel as String: "SMB Mount: \(name)"
+        ]
+        var status = SecItemUpdate(itemQuery as CFDictionary, updateAttributes as CFDictionary)
+        if status == errSecItemNotFound {
+            status = SecItemAdd(addQuery as CFDictionary, nil)
         }
 
         if status == errSecSuccess {
@@ -64,13 +68,12 @@ struct KeychainService {
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
         
-        // Prevent system prompt until user clicks "Authorize" in our custom UI
-        if !allowUI {
-            query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
-        } else {
-            query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIAllow
-            query[kSecUseOperationPrompt as String] = "為確保後續背景連線不會被打斷，請點擊「永遠允許 (Always Allow)」授權 SMB 掛載管理器。"
-        }
+        // Prevent a surprise system prompt during background reconnects. The
+        // explicit authorization screen temporarily enables interaction.
+        let context = LAContext()
+        context.interactionNotAllowed = !allowUI
+        context.localizedReason = "讀取 SMB 掛載密碼以重新連線"
+        query[kSecUseAuthenticationContext as String] = context
         
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
@@ -115,19 +118,29 @@ struct KeychainService {
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         
+        var unreadableMounts: [String] = []
         if status == errSecSuccess, let items = result as? [[String: Any]] {
             for item in items {
                 if let service = item[kSecAttrService as String] as? String,
                    let account = item[kSecAttrAccount as String] as? String {
                     if service.hasPrefix(servicePre) {
                         let mountName = service.replacingOccurrences(of: "\(servicePre)_", with: "")
-                        // Force read to trigger prompt
-                        let _ = getPassword(forMount: mountName, username: account)
+                        // Force read to trigger the authorization prompt and
+                        // report the actual result instead of always succeeding.
+                        if getPassword(forMount: mountName, username: account) == nil {
+                            unreadableMounts.append(mountName)
+                        }
                     }
                 }
             }
+        } else if status != errSecItemNotFound {
+            let message = SecCopyErrorMessageString(status, nil) as String? ?? "未知錯誤"
+            return (false, false, "無法讀取 Keychain：\(message)")
         }
-        
-        return (true, true, nil)
+
+        if unreadableMounts.isEmpty {
+            return (true, true, nil)
+        }
+        return (true, false, "無法讀取：\(unreadableMounts.joined(separator: "、"))")
     }
 }

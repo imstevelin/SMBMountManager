@@ -6,10 +6,10 @@ enum LogLevel: String {
     case error = "ERROR"
 }
 
-class AppLogger {
+final class AppLogger: @unchecked Sendable {
     static let shared = AppLogger()
     private let logFileURL: URL
-    private let queue = DispatchQueue(label: "org.imstevelin.SMBMountManager.logger")
+    private let queue = DispatchQueue(label: "org.imstevelin.SMBMountClientV3.logger")
     
     // DateFormatter setup based on MountEngine timestamp logic
     private let dateFormatter: ISO8601DateFormatter = {
@@ -21,10 +21,18 @@ class AppLogger {
     private init() {
         let fm = FileManager.default
         let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let managerDir = appSupport.appendingPathComponent("SMBMountManager")
+        let managerDir = appSupport.appendingPathComponent("SMBMountClientV3")
         
         try? fm.createDirectory(at: managerDir, withIntermediateDirectories: true)
         logFileURL = managerDir.appendingPathComponent("App.log")
+
+        // Keep background reconnect failures from growing the log forever.
+        if let size = (try? fm.attributesOfItem(atPath: logFileURL.path)[.size]) as? NSNumber,
+           size.int64Value > 5 * 1024 * 1024 {
+            let previousURL = managerDir.appendingPathComponent("App.previous.log")
+            try? fm.removeItem(at: previousURL)
+            try? fm.moveItem(at: logFileURL, to: previousURL)
+        }
         
         // Check if file exists, if not create it
         if !fm.fileExists(atPath: logFileURL.path) {
@@ -69,11 +77,13 @@ class AppLogger {
     
     // For reading by the LogViewerTab
     func readLogs() -> String {
-        guard let data = try? Data(contentsOf: logFileURL),
-              let content = String(data: data, encoding: .utf8) else {
-            return "Unable to read logs or no logs available."
+        queue.sync {
+            guard let data = try? Data(contentsOf: logFileURL),
+                  let content = String(data: data, encoding: .utf8) else {
+                return "Unable to read logs or no logs available."
+            }
+            return content
         }
-        return content
     }
     
     // Gets the path directly for things like opening in standard apps

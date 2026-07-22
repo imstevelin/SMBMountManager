@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 
 /// Represents a configured SMB mount point
-struct MountPoint: Identifiable, Codable, Hashable {
+struct MountPoint: Identifiable, Codable, Hashable, Sendable {
     var id: String { name }
     let name: String           // e.g. "nas_share" → /Volumes/nas_share
     let servers: [String]      // e.g. ["nas.local", "192.168.1.10"]
@@ -16,13 +16,17 @@ struct MountPoint: Identifiable, Codable, Hashable {
 
     var mountPath: String { "/Volumes/\(name)" }
     var logPath: String {
-        "\(NSHomeDirectory())/Library/Logs/mount_\(name).log"
+        "\(NSHomeDirectory())/Library/Application Support/SMBMountClientV3/App.log"
     }
     var keychainService: String { "smb_mount_\(name)" }
     var serversCSV: String { servers.joined(separator: ",") }
 
     // Config persistence path (JSON)
     static var configDirectory: String {
+        "\(NSHomeDirectory())/Library/Application Support/SMBMountClientV3/mounts"
+    }
+
+    static var legacyConfigDirectory: String {
         "\(NSHomeDirectory())/Library/Application Support/SMBMountManager/mounts"
     }
 
@@ -33,60 +37,68 @@ struct MountPoint: Identifiable, Codable, Hashable {
     // MARK: - Persistence
 
     func save() throws {
+        guard Self.isValidName(name) else {
+            throw CocoaError(.fileWriteInvalidFileName)
+        }
         let dir = Self.configDirectory
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         let data = try JSONEncoder().encode(self)
-        try data.write(to: URL(fileURLWithPath: configPath))
+        try data.write(to: URL(fileURLWithPath: configPath), options: .atomic)
     }
 
     func remove() {
-        try? FileManager.default.removeItem(atPath: configPath)
+        for directory in [Self.configDirectory, Self.legacyConfigDirectory] {
+            let url = URL(fileURLWithPath: directory, isDirectory: true)
+                .appendingPathComponent("\(name).json", isDirectory: false)
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 
     static func loadAll() -> [MountPoint] {
-        let dir = configDirectory
-        let fm = FileManager.default
-        guard let files = try? fm.contentsOfDirectory(atPath: dir) else { return [] }
-        return files
-            .filter { $0.hasSuffix(".json") }
-            .compactMap { file -> MountPoint? in
-                let path = "\(dir)/\(file)"
-                guard let data = fm.contents(atPath: path) else { return nil }
-                do {
-                    return try JSONDecoder().decode(MountPoint.self, from: data)
-                } catch {
-                    // Try decoding with missing newer properties backwards-compatibly if we need to.
-                    // Swift's default Codable synthesis fails if a field is missing, even with default struct values.
-                    return decodeLegacy(data: data)
-                }
-            }
-            .sorted { $0.name < $1.name }
+        loadAll(from: [
+            URL(fileURLWithPath: configDirectory, isDirectory: true),
+            URL(fileURLWithPath: legacyConfigDirectory, isDirectory: true)
+        ])
     }
 
-    private static func decodeLegacy(data: Data) -> MountPoint? {
-       // Temporary legacy struct that exactly matches the old format
-       struct LegacyMountPoint: Codable {
-           let name: String
-           let servers: [String]
-           let shareName: String
-           let username: String
-           let useKeychain: Bool
-           let mountOptions: String
-           var showInSidebar: Bool?
-           var createDesktopShortcut: Bool?
-       }
-       guard let legacy = try? JSONDecoder().decode(LegacyMountPoint.self, from: data) else { return nil }
-       return MountPoint(
-           name: legacy.name,
-           servers: legacy.servers,
-           shareName: legacy.shareName,
-           username: legacy.username,
-           useKeychain: legacy.useKeychain,
-           mountOptions: legacy.mountOptions,
-           showInSidebar: legacy.showInSidebar ?? true,
-           createDesktopShortcut: legacy.createDesktopShortcut ?? false,
-           allowedSSIDs: []
-       )
+    /// Loads configuration directories in priority order. The current directory
+    /// is passed first so a migrated/edited profile wins over its legacy copy.
+    static func loadAll(from directories: [URL]) -> [MountPoint] {
+        let fm = FileManager.default
+        var mountsByName: [String: MountPoint] = [:]
+
+        for directory in directories {
+            guard let files = try? fm.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: [.isRegularFileKey],
+                options: [.skipsHiddenFiles]
+            ) else { continue }
+
+            for file in files where file.pathExtension.lowercased() == "json" {
+                guard let data = try? Data(contentsOf: file),
+                      let mount = try? JSONDecoder().decode(MountPoint.self, from: data),
+                      mount.isStructurallyValid,
+                      mountsByName[mount.name] == nil else { continue }
+                mountsByName[mount.name] = mount
+            }
+        }
+
+        return mountsByName.values.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    static func isValidName(_ value: String) -> Bool {
+        guard !value.isEmpty else { return false }
+        return value.unicodeScalars.allSatisfy {
+            CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-").contains($0)
+        }
+    }
+
+    var isStructurallyValid: Bool {
+        Self.isValidName(name)
+            && !servers.compactMap(SMBConnection.normalizedHost).isEmpty
+            && !shareName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !shareName.contains("/")
+            && !username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     // MARK: - Export / Import
@@ -112,21 +124,52 @@ struct MountPoint: Identifiable, Codable, Hashable {
         return try? encoder.encode(profile)
     }
 
-    static func importMounts(from data: Data) -> (imported: [MountPoint], skipped: [String], error: String?) {
-        let existing = Set(loadAll().map(\.name))
+    static func importMounts(
+        from data: Data,
+        existingDirectories: [URL]? = nil,
+        destinationDirectory: URL? = nil
+    ) -> (imported: [MountPoint], skipped: [String], error: String?) {
+        let existingMounts = existingDirectories.map(loadAll(from:)) ?? loadAll()
+        var seenNames = Set(existingMounts.map(\.name))
         guard let profile = try? JSONDecoder().decode(ExportProfile.self, from: data) else {
             return ([], [], "無法解析設定檔，格式可能不正確。")
+        }
+        guard profile.version == 1 else {
+            return ([], [], "不支援此設定檔版本（\(profile.version)）。")
         }
         var imported: [MountPoint] = []
         var skipped: [String] = []
         for mount in profile.mounts {
-            if existing.contains(mount.name) {
+            guard mount.isStructurallyValid, seenNames.insert(mount.name).inserted else {
                 skipped.append(mount.name)
                 continue
             }
+            let normalized = MountPoint(
+                name: mount.name,
+                servers: mount.servers.compactMap(SMBConnection.normalizedHost),
+                shareName: mount.shareName.trimmingCharacters(in: .whitespacesAndNewlines),
+                username: mount.username.trimmingCharacters(in: .whitespacesAndNewlines),
+                useKeychain: true,
+                mountOptions: mount.mountOptions,
+                showInSidebar: mount.showInSidebar,
+                createDesktopShortcut: mount.createDesktopShortcut,
+                allowedSSIDs: Array(Set(mount.allowedSSIDs.map {
+                    $0.trimmingCharacters(in: .whitespacesAndNewlines)
+                }.filter { !$0.isEmpty })).sorted()
+            )
             do {
-                try mount.save()
-                imported.append(mount)
+                if let destinationDirectory {
+                    try FileManager.default.createDirectory(
+                        at: destinationDirectory,
+                        withIntermediateDirectories: true
+                    )
+                    let destination = destinationDirectory
+                        .appendingPathComponent("\(normalized.name).json", isDirectory: false)
+                    try JSONEncoder().encode(normalized).write(to: destination, options: .atomic)
+                } else {
+                    try normalized.save()
+                }
+                imported.append(normalized)
             } catch {
                 skipped.append(mount.name)
             }
@@ -135,8 +178,41 @@ struct MountPoint: Identifiable, Codable, Hashable {
     }
 }
 
+extension MountPoint {
+    private enum CodingKeys: String, CodingKey {
+        case name, servers, shareName, username, useKeychain, mountOptions
+        case showInSidebar, createDesktopShortcut, allowedSSIDs
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        servers = try container.decode([String].self, forKey: .servers)
+        shareName = try container.decode(String.self, forKey: .shareName)
+        username = try container.decode(String.self, forKey: .username)
+        useKeychain = try container.decodeIfPresent(Bool.self, forKey: .useKeychain) ?? true
+        mountOptions = try container.decodeIfPresent(String.self, forKey: .mountOptions) ?? ""
+        showInSidebar = try container.decodeIfPresent(Bool.self, forKey: .showInSidebar) ?? true
+        createDesktopShortcut = try container.decodeIfPresent(Bool.self, forKey: .createDesktopShortcut) ?? false
+        allowedSSIDs = try container.decodeIfPresent([String].self, forKey: .allowedSSIDs) ?? []
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        try container.encode(servers, forKey: .servers)
+        try container.encode(shareName, forKey: .shareName)
+        try container.encode(username, forKey: .username)
+        try container.encode(useKeychain, forKey: .useKeychain)
+        try container.encode(mountOptions, forKey: .mountOptions)
+        try container.encode(showInSidebar, forKey: .showInSidebar)
+        try container.encode(createDesktopShortcut, forKey: .createDesktopShortcut)
+        try container.encode(allowedSSIDs, forKey: .allowedSSIDs)
+    }
+}
+
 /// Runtime status of a mount point
-struct MountStatus: Identifiable {
+struct MountStatus: Identifiable, Equatable {
     var id: String { name }
     let name: String
     var isMounted: Bool = false

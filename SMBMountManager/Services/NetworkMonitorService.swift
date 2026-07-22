@@ -14,6 +14,7 @@ class NetworkMonitorService: ObservableObject {
     private let queue = DispatchQueue(label: "NetworkMonitor", qos: .utility)
     private var previousStatus: NWPath.Status?
     private var previousSSID: String?
+    private var previousInterfaceType: NWInterface.InterfaceType?
     var onNetworkChanged: (() -> Void)?
 
     init() {
@@ -24,17 +25,31 @@ class NetworkMonitorService: ObservableObject {
         monitor.pathUpdateHandler = { [weak self] path in
             Task { @MainActor in
                 guard let self = self else { return }
-                let wasConnected = self.isConnected
                 self.isConnected = (path.status == .satisfied)
-                self.interfaceType = path.availableInterfaces.first?.type
+                let activeInterface: NWInterface.InterfaceType?
+                if path.usesInterfaceType(.wiredEthernet) {
+                    activeInterface = .wiredEthernet
+                } else if path.usesInterfaceType(.wifi) {
+                    activeInterface = .wifi
+                } else if path.usesInterfaceType(.cellular) {
+                    activeInterface = .cellular
+                } else if path.usesInterfaceType(.loopback) {
+                    activeInterface = .loopback
+                } else if path.usesInterfaceType(.other) {
+                    activeInterface = .other
+                } else {
+                    activeInterface = nil
+                }
+                self.interfaceType = activeInterface
                 let newSSID = WiFiService.currentSSID()
                 let ssidChanged = (self.previousSSID != newSSID) && (self.previousStatus != nil)
+                let interfaceChanged = (self.previousInterfaceType != nil && self.previousInterfaceType != activeInterface)
                 self.currentSSID = newSSID
 
                 // Detect meaningful change (not just initial setup)
                 let statusChanged = (self.previousStatus != nil && path.status != self.previousStatus)
                 
-                if statusChanged || ssidChanged {
+                if statusChanged || ssidChanged || interfaceChanged {
                     self.lastChangeDate = Date()
                     // Trigger reconnection or rapid unmount evaluations on ALL meaningful transitions
                     self.onNetworkChanged?()
@@ -42,6 +57,7 @@ class NetworkMonitorService: ObservableObject {
                 
                 self.previousStatus = path.status
                 self.previousSSID = newSSID
+                self.previousInterfaceType = activeInterface
             }
         }
         monitor.start(queue: queue)

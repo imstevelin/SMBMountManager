@@ -87,7 +87,7 @@ struct StatusMenuView: View {
                 DispatchQueue.main.async {
                     NSApp.activate(ignoringOtherApps: true)
                     for window in NSApp.windows {
-                        if window.identifier?.rawValue == "main" || window.title == "SMB掛載管理器" {
+                        if window.identifier?.rawValue == "settings" || window.title == "SMB 自動掛載工具" {
                             window.makeKeyAndOrderFront(nil)
                             NotificationCenter.default.post(name: NSNotification.Name("OpenDownloadsTab"), object: nil)
                             return
@@ -151,7 +151,7 @@ struct StatusMenuView: View {
                 DispatchQueue.main.async {
                     NSApp.activate(ignoringOtherApps: true)
                     for window in NSApp.windows {
-                        if window.identifier?.rawValue == "main" || window.title == "SMB掛載管理器" {
+                        if window.identifier?.rawValue == "settings" || window.title == "SMB 自動掛載工具" {
                             window.makeKeyAndOrderFront(nil)
                             NotificationCenter.default.post(name: NSNotification.Name("OpenUploadsTab"), object: nil)
                             return
@@ -187,9 +187,6 @@ struct StatusMenuView: View {
         .keyboardShortcut(",", modifiers: .command)
 
         Button {
-            AppLifecycle.shared.isTerminating = true
-            // Force synchronous unmount before we even tell the OS to begin termination
-            mountManager.unmountAllAndStopSync()
             NSApp.terminate(nil)
         } label: {
             Label("結束", systemImage: "power")

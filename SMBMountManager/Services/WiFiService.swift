@@ -4,7 +4,8 @@ import CoreLocation
 
 /// Provides Wi-Fi SSID detection using CoreWLAN
 /// On macOS 14+, requires Location Services permission to read the SSID.
-class WiFiService: NSObject, CLLocationManagerDelegate {
+@MainActor
+final class WiFiService: NSObject, CLLocationManagerDelegate {
     private static let shared = WiFiService()
     private var locationManager: CLLocationManager?
     
@@ -58,7 +59,7 @@ class WiFiService: NSObject, CLLocationManagerDelegate {
         return allowedSSIDs.contains(ssid)
     }
     
-    func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
+    nonisolated func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
         // Handle authorization changes if needed
     }
 }

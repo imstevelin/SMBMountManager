@@ -145,7 +145,7 @@ struct MountDetailView: View {
                 configRow("伺服器", mount.servers.joined(separator: ", "))
                 configRow("共享名稱", mount.shareName)
                 configRow("帳號", mount.username)
-                configRow("密碼儲存", mount.useKeychain ? "🔒 Keychain" : "⚠️ 明文")
+                configRow("密碼儲存", "🔒 macOS Keychain")
                 configRow("側邊欄顯示", mount.showInSidebar ? "開啟" : "關閉")
                 if mount.showInSidebar {
                     configRow("建立桌面捷徑", mount.createDesktopShortcut ? "開啟" : "關閉")

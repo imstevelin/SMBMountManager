@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 /// In-process mount engine that replaces the external bash mount script.
@@ -50,8 +51,12 @@ actor MountEngine {
         _failCount = 0
 
         while !Task.isCancelled {
-            // SSID check — skip mount attempts if not on allowed network
-            if !mount.allowedSSIDs.isEmpty && !WiFiService.isOnAllowedNetwork(allowedSSIDs: mount.allowedSSIDs) {
+            // Use the manager's single policy implementation so Ethernet rules
+            // and Wi-Fi SSID rules cannot disagree with the engine.
+            let isRestricted = await MainActor.run {
+                AppLifecycle.shared.mountManager?.isNetworkRestricted(for: mount) ?? false
+            }
+            if isRestricted {
                 log("[INFO] Not on allowed SSID for '\(mount.name)', waiting…")
                 try? await Task.sleep(for: .seconds(mountedCheckInterval))
                 continue
@@ -73,112 +78,7 @@ actor MountEngine {
                 }
             }
 
-            // Prevent duplicate ghost mounts on wake-from-sleep: ensure target path is fully clear before any new mount attempt
-            let targetPath = mount.mountPath
-            
-            // Use Process to check directory contents safely to avoid Swift Concurrency / FileManager kernel deadlocks on stale mounts
-            let isOccupied: Bool = await {
-                let task = Process()
-                task.launchPath = "/bin/bash"
-                // Returns 0 if directory is occupied by user files or phantom mounts, else 1
-                task.arguments = ["-c", """
-                TARGET="$1"
-                shopt -s nullglob
-                OCCUPIED=1
-                
-                # 1. Clean up abandoned empty `-X` ghost folders
-                for dir in "$TARGET-"[0-9]*; do
-                    if [ -d "$dir" ]; then
-                        if ! /sbin/mount | grep -qF " on $dir "; then
-                            # Not mounted, safe to check contents
-                            FILES=$(ls -A "$dir" 2>/dev/null | grep -v '^\\.DS_Store$')
-                            if [ -z "$FILES" ]; then
-                                rm -rf "$dir" 2>/dev/null
-                            fi
-                        else
-                            # Active phantom mount
-                            OCCUPIED=0
-                        fi
-                    fi
-                done
-                
-                # 2. Check if the primary target path is clear
-                if [ -d "$TARGET" ]; then
-                    if ! /sbin/mount | grep -qF " on $TARGET "; then
-                        # Not mounted
-                        FILES=$(ls -A "$TARGET" 2>/dev/null | grep -v '^\\.DS_Store$')
-                        if [ -z "$FILES" ]; then
-                            # Empty, clean it up
-                            rm -rf "$TARGET" 2>/dev/null
-                        else
-                            # Has files, it's occupied (could be a stale mount or user data)
-                            OCCUPIED=0
-                        fi
-                    else
-                        # Mounted (stale or active, but we only get here if swift thinks it's NOT successfully mounted, 
-                        # so if it is mounted here, it's a stale/ghost mount that needs OS cleanup)
-                        OCCUPIED=0
-                    fi
-                fi
-                
-                exit $OCCUPIED
-                """, "--", targetPath]
-                task.standardOutput = FileHandle.nullDevice
-                task.standardError = FileHandle.nullDevice
-
-                var didTimeout = false
-                do {
-                    try task.run()
-                    let deadline = Date().addingTimeInterval(2.0)
-                    while task.isRunning && Date() < deadline {
-                        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s
-                    }
-                    if task.isRunning {
-                        task.terminate()
-                        didTimeout = true
-                    }
-                } catch {
-                    return false
-                }
-                
-                if didTimeout { return true } // Assume occupied if OS hangs
-                return task.terminationStatus == 0
-            }()
-
-            if isOccupied {
-                log("[WARN] Mount path \(targetPath) is occupied by a stale session or phantom mounts. Attempting OS cleanup...")
-                let _ = await Task.detached { [weak self] in
-                    let task = Process()
-                    task.launchPath = "/bin/bash"
-                    task.arguments = ["-c", """
-                    TARGET="$1"
-                    shopt -s nullglob
-                    for dir in "$TARGET" "$TARGET-"[0-9]*; do
-                        if [ -d "$dir" ] || /sbin/mount | grep -qF " on $dir "; then
-                            /sbin/umount -f "$dir" || /usr/sbin/diskutil unmount force "$dir" 2>/dev/null
-                        fi
-                    done
-                    """, "--", targetPath]
-                    task.standardOutput = FileHandle.nullDevice
-                    task.standardError = FileHandle.nullDevice
-                    
-                    do {
-                        try task.run()
-                        
-                        let deadline = Date().addingTimeInterval(15)
-                        while task.isRunning && Date() < deadline {
-                            Thread.sleep(forTimeInterval: 0.1)
-                        }
-                        
-                        if task.isRunning {
-                            self?.log("[ERROR] OS stale session cleanup timed out after 15 seconds. Terminating.")
-                            task.terminate()
-                        }
-                    } catch {
-                        self?.log("[ERROR] OS stale session cleanup failed: \(error.localizedDescription)")
-                    }
-                }.value
-                
+            guard await prepareMountDirectory() else {
                 _failCount += 1
                 try? await Task.sleep(for: .seconds(mountedCheckInterval))
                 continue
@@ -187,6 +87,7 @@ actor MountEngine {
             // Get password
             guard let password = getPassword() else {
                 log("[ERROR] Cannot retrieve password for '\(mount.name)'")
+                _failCount += 1
                 try? await Task.sleep(for: .seconds(passwordRetryInterval))
                 continue
             }
@@ -196,15 +97,8 @@ actor MountEngine {
             for server in mount.servers {
                 guard !Task.isCancelled else { return }
 
-                // Check server reachability
-                let reachable = await Task.detached { self.isServerReachable(server) }.value
-                guard reachable else {
-                    log("[WARN] Server \(server) not reachable")
-                    continue
-                }
-
                 // Try mount_smbfs first
-                let smbfsSuccess = await Task.detached { self.attemptMountSmbfs(server: server, password: password) }.value
+                let smbfsSuccess = await self.attemptMountSmbfs(server: server, password: password)
                 if smbfsSuccess {
                     log("[SUCCESS] Mounted \(mount.name) on \(server)")
                     mounted = true
@@ -217,8 +111,11 @@ actor MountEngine {
                     break
                 }
 
-                // Fallback: Finder mount via osascript
-                let finderSuccess = await Task.detached { self.attemptFinderMount(server: server, password: password) }.value
+                // Finder chooses the volume name itself. It is only a valid
+                // fallback when that name matches our configured mount path.
+                let finderSuccess = mount.name == mount.shareName
+                    ? await self.attemptFinderMount(server: server, password: password)
+                    : false
                 if finderSuccess {
                     log("[SUCCESS] Finder mount succeeded for \(mount.name) on \(server)")
                     mounted = true
@@ -253,7 +150,7 @@ actor MountEngine {
 
     // MARK: - Mount Methods
 
-    nonisolated private func attemptMountSmbfs(server: String, password: String) -> Bool {
+    nonisolated private func attemptMountSmbfs(server: String, password: String) async -> Bool {
         let mountPath = mount.mountPath
         let fm = FileManager.default
 
@@ -268,40 +165,71 @@ actor MountEngine {
             }
         }
 
-        // Build mount_smbfs command
-        let url = "//\(mount.username):\(password)@\(server)/\(mount.shareName)"
-        var args: [String] = []
+        guard let source = SMBConnection.mountSourceWithoutPassword(
+            username: mount.username,
+            server: server,
+            shareName: mount.shareName
+        ) else {
+            log("[ERROR] Invalid SMB server or share configuration")
+            return false
+        }
+
         var optionsParts = mount.mountOptions.components(separatedBy: ",").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         
         if !mount.showInSidebar && !optionsParts.contains("nobrowse") {
             optionsParts.append("nobrowse")
         }
         
-        if !optionsParts.isEmpty {
-            args.append(contentsOf: ["-o", optionsParts.joined(separator: ",")])
-        }
-        args.append(url)
-        args.append(mountPath)
-
         log("[INFO] Attempting mount_smbfs on \(server)")
 
+        // mount_smbfs accepts a password only in argv or from a terminal.
+        // Expect provides the terminal while reading the password from stdin,
+        // keeping the secret out of process listings and log output.
+        let expectScript = #"""
+        set timeout 15
+        log_user 1
+        if {[gets stdin password] < 0} { exit 125 }
+        set command [list /sbin/mount_smbfs]
+        if {[info exists env(SMB_MOUNT_OPTIONS)] && $env(SMB_MOUNT_OPTIONS) ne ""} {
+            lappend command -o $env(SMB_MOUNT_OPTIONS)
+        }
+        lappend command $env(SMB_MOUNT_SOURCE) $env(SMB_MOUNT_PATH)
+        spawn -noecho {*}$command
+        expect {
+            -re {Password for [^:]+:} { send -- "$password\r"; exp_continue }
+            eof { set result [wait]; exit [lindex $result 3] }
+            timeout { close; wait; exit 124 }
+        }
+        """#
+
         let task = Process()
-        task.launchPath = "/sbin/mount_smbfs"
-        task.arguments = args
-        task.standardOutput = FileHandle.nullDevice
-        task.standardError = FileHandle.nullDevice
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/expect")
+        task.arguments = ["-c", expectScript]
+        var environment = ProcessInfo.processInfo.environment
+        environment["SMB_MOUNT_SOURCE"] = source
+        environment["SMB_MOUNT_PATH"] = mountPath
+        environment["SMB_MOUNT_OPTIONS"] = optionsParts.joined(separator: ",")
+        task.environment = environment
+        let inputPipe = Pipe()
+        let errorPipe = Pipe()
+        task.standardInput = inputPipe
+        task.standardOutput = errorPipe
+        task.standardError = errorPipe
 
         do {
             try task.run()
+            inputPipe.fileHandleForWriting.write(Data((password + "\n").utf8))
+            try? inputPipe.fileHandleForWriting.close()
             
-            // Implement a 15-second timeout to prevent deadlocks during network reconnects
-            let deadline = Date().addingTimeInterval(15)
+            // Give Expect a little longer than its own timeout so it can reap
+            // mount_smbfs and return the child status cleanly.
+            let deadline = Date().addingTimeInterval(18)
             while task.isRunning && Date() < deadline {
-                Thread.sleep(forTimeInterval: 0.1)
+                try? await Task.sleep(nanoseconds: 100_000_000)
             }
             
             if task.isRunning {
-                log("[ERROR] mount_smbfs timed out after 15 seconds. Terminating.")
+                log("[ERROR] mount_smbfs timed out after 18 seconds. Terminating.")
                 task.terminate()
                 if createdDir { try? fm.removeItem(atPath: mountPath) }
                 return false
@@ -312,11 +240,22 @@ actor MountEngine {
             return false
         }
 
-        if task.terminationStatus == 0 && isMounted() {
-            return true
+        if task.terminationStatus == 0 {
+            let deadline = Date().addingTimeInterval(2)
+            while Date() < deadline {
+                if isMounted() { return true }
+                try? await Task.sleep(nanoseconds: 100_000_000)
+            }
         }
 
-        log("[ERROR] mount_smbfs failed on \(server) (exit code: \(task.terminationStatus))")
+        let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+        let rawDetail = String(data: errorData, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let detail = password.isEmpty
+            ? rawDetail
+            : rawDetail.replacingOccurrences(of: password, with: "[redacted]")
+        let suffix = detail.isEmpty ? "" : ": \(detail)"
+        log("[ERROR] mount_smbfs failed on \(server) (exit code: \(task.terminationStatus))\(suffix)")
         if createdDir {
             if let contents = try? fm.contentsOfDirectory(atPath: mountPath), contents.isEmpty {
                 try? fm.removeItem(atPath: mountPath)
@@ -325,65 +264,34 @@ actor MountEngine {
         return false
     }
 
-    nonisolated private func attemptFinderMount(server: String, password: String) -> Bool {
-        let url = "smb://\(mount.username):\(password)@\(server)/\(mount.shareName)"
-        let script = "try\nmount volume \"\(url)\"\nend try"
+    nonisolated private func attemptFinderMount(server: String, password: String) async -> Bool {
+        guard let urlString = SMBConnection.finderURL(
+            username: mount.username,
+            password: password,
+            server: server,
+            shareName: mount.shareName
+        ), let url = URL(string: urlString) else { return false }
 
         log("[INFO] Attempting Finder mount on \(server)")
 
-        let task = Process()
-        task.launchPath = "/usr/bin/osascript"
-        task.arguments = ["-e", script]
-        task.standardOutput = FileHandle.nullDevice
-        task.standardError = FileHandle.nullDevice
-
-        do {
-            try task.run()
-            
-            let deadline = Date().addingTimeInterval(15)
-            while task.isRunning && Date() < deadline {
-                Thread.sleep(forTimeInterval: 0.1)
-            }
-            
-            if task.isRunning {
-                log("[ERROR] osascript (Finder mount) timed out after 15 seconds. Terminating.")
-                task.terminate()
-                return false
-            }
-        } catch {
-            return false
-        }
+        // Send the URL directly through Launch Services. Passing it as an
+        // osascript argument would expose the credential URL in process lists.
+        let opened = await MainActor.run { NSWorkspace.shared.open(url) }
+        guard opened else { return false }
 
         // Wait briefly for Finder to complete
-        Thread.sleep(forTimeInterval: 2)
+        try? await Task.sleep(nanoseconds: 2_000_000_000)
         return isMounted()
     }
 
     // MARK: - Status Checks
 
     nonisolated func isMounted() -> Bool {
-        let url = URL(fileURLWithPath: mount.mountPath)
-        guard let volumes = FileManager.default.mountedVolumeURLs(
-            includingResourceValuesForKeys: nil,
-            options: [.skipHiddenVolumes]
-        ) else { return false }
-        return volumes.contains(url)
+        MountManager.isMounted(mount.mountPath)
     }
 
 
     // MARK: - Helpers
-
-    nonisolated private func isServerReachable(_ server: String) -> Bool {
-        // Try ICMP ping first
-        if processRun(path: "/sbin/ping", args: ["-c", "1", "-W", "1000", server]) {
-            return true
-        }
-        // Try SMB port (445) via nc
-        if processRun(path: "/usr/bin/nc", args: ["-z", "-w", "3", server, "445"]) {
-            return true
-        }
-        return false
-    }
 
     nonisolated private func getPassword() -> String? {
         if mount.useKeychain {
@@ -394,36 +302,103 @@ actor MountEngine {
         return KeychainService.retrievePassword(forMount: mount.name, username: mount.username)
     }
 
-    nonisolated private func processRun(path: String, args: [String]) -> Bool {
-        let task = Process()
-        task.launchPath = path
-        task.arguments = args
-        task.standardOutput = FileHandle.nullDevice
-        task.standardError = FileHandle.nullDevice
-        do {
-            try task.run()
-            task.waitUntilExit()
-            return task.terminationStatus == 0
-        } catch {
+    /// Makes sure the target is a real empty directory. A non-empty local
+    /// directory is never removed or force-unmounted because it may contain
+    /// user data. A directory operation that hangs is treated as a stale mount
+    /// and handed to the OS unmount tools before the next retry.
+    private func prepareMountDirectory() async -> Bool {
+        let path = mount.mountPath
+        if isMounted() { return true }
+
+        let fileManager = FileManager.default
+        var isDirectory: ObjCBool = false
+        if !fileManager.fileExists(atPath: path, isDirectory: &isDirectory) {
+            do {
+                try fileManager.createDirectory(atPath: path, withIntermediateDirectories: false)
+                return true
+            } catch {
+                log("[ERROR] Cannot create mount directory \(path): \(error.localizedDescription)")
+                return false
+            }
+        }
+        guard isDirectory.boolValue else {
+            log("[ERROR] Mount path is occupied by a local file: \(path)")
             return false
         }
+
+        // Ask `find` for at most one meaningful entry. Unlike `ls -A`, this
+        // cannot fill a pipe and deadlock when a stale directory is very large.
+        let listing = await Self.runProcess(
+            path: "/usr/bin/find",
+            arguments: [path, "-mindepth", "1", "-maxdepth", "1", "!", "-name", ".DS_Store", "-print", "-quit"],
+            timeout: 2
+        )
+        if listing.timedOut {
+            log("[WARN] Mount directory did not respond; requesting stale mount cleanup")
+            await Self.unmount(path: path)
+            return false
+        }
+        guard listing.exitCode == 0 else {
+            log("[ERROR] Cannot inspect mount directory \(path)")
+            return false
+        }
+
+        if listing.output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            try? fileManager.removeItem(atPath: path + "/.DS_Store")
+            return true
+        }
+
+        log("[ERROR] Mount path contains local files and was left untouched: \(path)")
+        return false
+    }
+
+    private static func unmount(path: String) async {
+        let first = await runProcess(path: "/sbin/umount", arguments: ["-f", path], timeout: 8)
+        if first.exitCode != 0 {
+            _ = await runProcess(path: "/usr/sbin/diskutil", arguments: ["unmount", "force", path], timeout: 8)
+        }
+    }
+
+    private static func runProcess(path: String, arguments: [String], timeout: TimeInterval) async
+        -> (exitCode: Int32, output: String, timedOut: Bool) {
+        let process = Process()
+        let outputPipe = Pipe()
+        process.executableURL = URL(fileURLWithPath: path)
+        process.arguments = arguments
+        process.standardOutput = outputPipe
+        process.standardError = FileHandle.nullDevice
+        do {
+            try process.run()
+        } catch {
+            return (-1, "", false)
+        }
+
+        let deadline = Date().addingTimeInterval(timeout)
+        while process.isRunning && Date() < deadline {
+            if Task.isCancelled {
+                process.terminate()
+                return (-1, "", true)
+            }
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+        if process.isRunning {
+            process.terminate()
+            return (-1, "", true)
+        }
+        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        return (
+            process.terminationStatus,
+            String(data: data, encoding: .utf8) ?? "",
+            false
+        )
     }
 
     // MARK: - Latency Measurement
 
     /// Measure ping latency to the first server. Returns milliseconds or nil if unreachable.
     nonisolated func measureLatency() -> Double? {
-        guard let server = mount.servers.first else { return nil }
-        
-        // Clean up smb:// prefix if present
-        var cleanServer = server.replacingOccurrences(of: "smb://", with: "", options: .caseInsensitive)
-        cleanServer = cleanServer.replacingOccurrences(of: "cifs://", with: "", options: .caseInsensitive)
-        // Remove username@ if present
-        if let atIndex = cleanServer.firstIndex(of: "@") {
-            cleanServer = String(cleanServer[cleanServer.index(after: atIndex)...])
-        }
-        // Extract just the host, removing paths or ports
-        let host = cleanServer.components(separatedBy: "/").first?.components(separatedBy: ":").first ?? cleanServer
+        guard let server = mount.servers.first,
+              let host = SMBConnection.normalizedHost(server) else { return nil }
         
         let task = Process()
         task.launchPath = "/sbin/ping"
@@ -504,15 +479,17 @@ actor MountEngine {
         let desktopPath = (NSSearchPathForDirectoriesInDomains(.desktopDirectory, .userDomainMask, true).first ?? "") + "/\(aliasName)"
         let fm = FileManager.default
         
-        // Aliases resolve to directories, causing fileExists(isDirectory:) to return true.
-        // We just verify it exists at all, then delete it.
-        if fm.fileExists(atPath: desktopPath) {
+        let desktopURL = URL(fileURLWithPath: desktopPath)
+        let isFinderAlias = (try? desktopURL.resourceValues(forKeys: [.isAliasFileKey]).isAliasFile) == true
+        if isFinderAlias {
             do {
                 log("[INFO] Removing desktop shortcut for '\(mount.name)'")
-                try fm.removeItem(atPath: desktopPath)
+                try fm.removeItem(at: desktopURL)
             } catch {
                 log("[WARN] Failed to remove desktop shortcut: \(error.localizedDescription)")
             }
+        } else if fm.fileExists(atPath: desktopPath) {
+            log("[WARN] Desktop item '\(mount.name)' is not an alias and was left untouched")
         }
     }
 

@@ -3,7 +3,8 @@ import SwiftUI
 import ServiceManagement
 
 /// Persistent app settings using @AppStorage
-class AppSettings: ObservableObject {
+@MainActor
+final class AppSettings: ObservableObject {
     static let shared = AppSettings()
 
     @AppStorage("showNotifications") var showNotifications: Bool = true
@@ -11,6 +12,17 @@ class AppSettings: ObservableObject {
     @AppStorage("autoCheckUpdates") var autoCheckUpdates: Bool = true
     @AppStorage("launchAtLogin") var launchAtLogin: Bool = true {
         didSet { updateLoginItem() }
+    }
+
+    private init() {
+        let current = UserDefaults.standard
+        guard let legacy = UserDefaults(suiteName: "org.imstevelin.SMBMountManager") else { return }
+        for key in ["showNotifications", "showMountCount", "autoCheckUpdates", "launchAtLogin"]
+            where current.object(forKey: key) == nil {
+            if let value = legacy.object(forKey: key) {
+                current.set(value, forKey: key)
+            }
+        }
     }
 
     private func updateLoginItem() {

@@ -28,45 +28,39 @@ struct LaunchdService {
         exit 0
         """
         guard writeFile(fixerScript, to: fixerScriptPath) else { return false }
-        shell("chmod 755 \"\(fixerScriptPath)\"")
+        guard run("/bin/chmod", arguments: ["755", fixerScriptPath]) else { return false }
 
         // Write fixer plist to /tmp, then move with admin privileges
-        let tmpPlist = "/tmp/\(fixerLabel).plist"
-        let fixerPlistContent = """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-        <plist version="1.0">
-        <dict>
-            <key>Label</key>
-            <string>\(fixerLabel)</string>
-            <key>ProgramArguments</key>
-            <array>
-                <string>/bin/bash</string>
-                <string>\(fixerScriptPath)</string>
-            </array>
-            <key>RunAtLoad</key>
-            <true/>
-        </dict>
-        </plist>
-        """
-        guard writeFile(fixerPlistContent, to: tmpPlist) else { return false }
+        let tmpPlist = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(fixerLabel)-\(UUID().uuidString).plist").path
+        let plist: [String: Any] = [
+            "Label": fixerLabel,
+            "ProgramArguments": ["/bin/bash", fixerScriptPath],
+            "RunAtLoad": true
+        ]
+        guard let plistData = try? PropertyListSerialization.data(
+            fromPropertyList: plist,
+            format: .xml,
+            options: 0
+        ), (try? plistData.write(to: URL(fileURLWithPath: tmpPlist), options: .atomic)) != nil else {
+            return false
+        }
+        defer { try? FileManager.default.removeItem(atPath: tmpPlist) }
 
-        let adminCmd = """
-        mv '\(tmpPlist)' '\(fixerPlistPath)' && \
-        chown root:wheel '\(fixerPlistPath)' && \
-        chmod 644 '\(fixerPlistPath)' && \
-        launchctl unload '\(fixerPlistPath)' 2>/dev/null; \
-        launchctl load -w '\(fixerPlistPath)'
-        """
+        let tempArg = shellQuote(tmpPlist)
+        let plistArg = shellQuote(fixerPlistPath)
+        let adminCmd = "/bin/mv \(tempArg) \(plistArg) && "
+            + "/usr/sbin/chown root:wheel \(plistArg) && "
+            + "/bin/chmod 644 \(plistArg) && "
+            + "(/bin/launchctl unload \(plistArg) >/dev/null 2>&1 || true); "
+            + "/bin/launchctl load -w \(plistArg)"
         return shellWithAdmin(adminCmd)
     }
 
     /// Remove the fixer service (requires admin privileges)
     static func removeFixer() -> Bool {
-        let adminCmd = """
-        launchctl unload '\(fixerPlistPath)' 2>/dev/null; \
-        rm -f '\(fixerPlistPath)'
-        """
+        let plistArg = shellQuote(fixerPlistPath)
+        let adminCmd = "(/bin/launchctl unload \(plistArg) >/dev/null 2>&1 || true); /bin/rm -f \(plistArg)"
         let ok = shellWithAdmin(adminCmd)
         try? FileManager.default.removeItem(atPath: fixerScriptPath)
         return ok
@@ -74,11 +68,10 @@ struct LaunchdService {
 
     // MARK: - Shell Helpers
 
-    @discardableResult
-    private static func shell(_ command: String) -> Bool {
+    private static func run(_ executable: String, arguments: [String]) -> Bool {
         let task = Process()
-        task.launchPath = "/bin/bash"
-        task.arguments = ["-c", command]
+        task.executableURL = URL(fileURLWithPath: executable)
+        task.arguments = arguments
         task.standardOutput = FileHandle.nullDevice
         task.standardError = FileHandle.nullDevice
         do { try task.run(); task.waitUntilExit(); return task.terminationStatus == 0 }
@@ -86,15 +79,22 @@ struct LaunchdService {
     }
 
     private static func shellWithAdmin(_ command: String) -> Bool {
-        let escaped = command.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
-        let script = "do shell script \"\(escaped)\" with administrator privileges"
+        let script = """
+        on run argv
+            do shell script (item 1 of argv) with administrator privileges
+        end run
+        """
         let task = Process()
-        task.launchPath = "/usr/bin/osascript"
-        task.arguments = ["-e", script]
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        task.arguments = ["-e", script, command]
         task.standardOutput = FileHandle.nullDevice
         task.standardError = FileHandle.nullDevice
         do { try task.run(); task.waitUntilExit(); return task.terminationStatus == 0 }
         catch { return false }
+    }
+
+    private static func shellQuote(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
     private static func writeFile(_ content: String, to path: String) -> Bool {
